@@ -25,7 +25,7 @@
 **Ehrliche Einschränkungen von World 2.0**
 - In den Langläufen mit normalen Ressourcen kam es zu **keinem Diebstahl und keiner Gewalt** – Not war zu selten. Die Mechanismen
   (Tat, Zeugen, falsche Beschuldigung, Ermittlung, Urteil, Sanktion) sind per Test und im Knappheitsexperiment geprüft.
-- Generationen: In 12 Jahren erreichten die ersten Kinder noch nicht das Erwachsenenalter (18 Jahre ≈ 2 Stunden reine Rechenzeit bzw. ≈ 2 Tage bei 100×).
+- Generationen: In 12 Jahren erreichten die ersten Kinder noch nicht das Erwachsenenalter (18 Jahre ≈ 2 Stunden bei 100× bzw. ≈ 2 Minuten im Headless-Lauf ohne Modell).
   Die Übergabe an Erwachsene ist getestet, aber noch nicht in einem Langlauf beobachtet.
 - Langläufe liefen **ohne Sprachmodell**. Mit Modell treffen die Bewohner bei knappen, bedeutsamen Entscheidungen Modellwahlen –
   auf der CPU aber nur einen kleinen Teil; der Rest bleibt regelbasiert und ist so markiert.
