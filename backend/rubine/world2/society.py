@@ -446,10 +446,10 @@ def apply_proposal(w: World, prop: dict, cause: int) -> None:
                 "region": region, "founded": w.tick, "founder": prop["proposer"], "members": [a["id"] for a in w.adults(region)],
                 "leaders": [], "active": True, "legitimacy": 0.6, "inv": {}, "term_end": None, "seat": None,
                 "history": [], "cause": cause, "protests": 0}
-        if old:
+        w.institutions[iid] = inst
+        if old:  # the common treasury passes to the new order
             for it, n in list((old.get("inv") or {}).items()):
                 w.transfer(("inst", old["id"]), ("inst", iid), it, n)
-        w.institutions[iid] = inst
         eid = w.emit("politik", "regierung_gegruendet", f"Neue Regierungsform in {w.region_name(region)}: {R.GOVERNMENT_FORMS[form]}.",
                      data={"inst": iid, "form": form}, cause=cause, witnesses=False)
         _announce(w, region, f"gov:{iid}", f"In {w.region_name(region)} gilt jetzt: {R.GOVERNMENT_FORMS[form]}.", eid)

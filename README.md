@@ -9,7 +9,8 @@ Version für Version weitertrainiert wird.
 | Bereich | Was es tut |
 |---|---|
 | **Chat** | Mehrere Unterhaltungen, Umbenennen/Löschen, Bearbeiten, Neu generieren, Streaming, Markdown + Code mit Kopieren, Suche, Modellversion wählen |
-| **Rubine World** | 25 Agenten mit Persönlichkeit, Zielen, Tagesplan, Langzeitgedächtnis, Reflexion. Sie reden miteinander und lösen in Teams Aufgaben, die ein Prüflabor gegen Musterlösungen verifiziert. Live-2D-Ansicht |
+| **Rubine World 2.0** | Persistente KI-Gesellschaft: 25 simulierte Bewohner ohne vorgegebene Regierung, Gesetze, Geld oder Gebäude. Sie bauen, handeln, gründen Familien, Regierungen, Gerichte, Schulen und Währungen, erkranken, altern und sterben – alles über eine prüfbare World Engine. Interaktive Karte mit Tag/Nacht und Wetter, Bewohner-Inspektor, Live-Feed, Chronik, Steuerung ([Details](docs/WORLD2.md)) |
+| **Klassische Welt (v0.1)** | Die ursprüngliche Smallville-Stadt bleibt optional erhalten (`RUBINE_SIM_ENABLED=true`, Seite `/world/classic`) |
 | **AI Lab** | Trainingsdaten erzeugen/importieren/prüfen, versionierte Datensätze, echtes LoRA-Training (Start/Pause/Stopp), Live-Loss, Evaluation, Modellvergleich, Aktivierung, Rollback, Ressourcen-Monitor |
 | **iPhone** | Installierbare PWA (OLED-Schwarz, Liquid Glass, Safe Areas/Dynamic Island), „Zum Home-Bildschirm“ |
 
@@ -46,8 +47,8 @@ Details, Fehlersuche und sicherer Zugriff von unterwegs (HTTPS über Tailscale):
 
 ## Die KI verbessern – der Ablauf
 
-1. **AI Lab → Daten hinzufügen**: z. B. 300 synthetische Aufgaben erzeugen und den Seed-Datensatz `claude_authored_v1.jsonl` importieren.
-   Parallel sammeln die Agenten in Rubine World verifizierte Lösungen.
+1. **AI Lab → Daten hinzufügen**: z. B. 300 synthetische Aufgaben erzeugen, den Seed-Datensatz `claude_authored_v1.jsonl` importieren
+   und „Aus Rubine World“ verifizierte Aufgaben aus echten Simulationsereignissen exportieren.
 2. **Training starten** (z. B. 60 Schritte). Rubine baut einen versionierten Datensatz, trainiert einen LoRA-Adapter und
    evaluiert ihn gegen die Ausgangsversion auf einem **unabhängigen, eingefrorenen Testdatensatz**.
 3. Besteht die Version die Prüfung, wird sie **vorgeschlagen** – du aktivierst sie selbst. Rollback ist jederzeit möglich.
@@ -57,6 +58,7 @@ Wie das Training gegen Selbstbestätigung abgesichert ist: **[docs/TRAINING.md](
 ## Dokumentation
 
 - [docs/STATUS.md](docs/STATUS.md) – ehrlicher Stand, Messergebnisse, Grenzen
+- [docs/WORLD2.md](docs/WORLD2.md) – Rubine World 2.0: Regeln der Welt, Agentenarchitektur, Persistenz, Training, Grenzen
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – Aufbau, Komponenten, Datenfluss
 - [docs/TRAINING.md](docs/TRAINING.md) – Trainingspipeline, Lehrer-Modelle, Datenformat für Claude-Importe
 - [docs/IPHONE.md](docs/IPHONE.md) – iPhone, PWA, WLAN, HTTPS

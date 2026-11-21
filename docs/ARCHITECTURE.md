@@ -12,7 +12,7 @@
                                       │                                                           │
                                       │  ModelEngine (Thread)   ── Basismodell + LoRA-Adapter       │
                                       │     Chat hat Vorrang vor Agenten-„Gedanken“                 │
-                                      │  World (asyncio-Tick + Kognitions-Thread)                   │
+                                      │  World 2.0 (Engine-Thread + Modell-Thread, eigene DB je Welt)│
                                       │  JobManager (Thread) ──► Worker-Prozesse                   │
                                       │                           python -m rubine.jobs.runner ID   │
                                       │                           (Training / Eval / Daten)         │
@@ -29,7 +29,8 @@
 | `rubine/llm/engine.py` | Lädt Basismodell einmal, hängt LoRA-Adapter pro Version an (PEFT), Streaming via `TextIteratorStreamer`, Prioritäts-Lock (Chat vor Simulation) |
 | `rubine/llm/registry.py` | Versionen, Aktivierungshistorie, Aktivieren nur für `passed`, Rollback |
 | `rubine/chat/router.py` | Chat-API: CRUD, Senden/Bearbeiten/Neu generieren mit SSE, Feedback, Suche, Zustimmung zum Training |
-| `rubine/world/*` | Stadtplan, 25 Personas, Gedächtnis (Recency + Importance + Relevance), Simulation, API |
+| `rubine/world/*` | Klassische v0.1-Welt (optional): Stadtplan, 25 Personas, Gedächtnis, Simulation, API |
+| `rubine/world2/*` | **Rubine World 2.0**: deterministische World Engine, Gesellschaft, Wirtschaft, Persistenz je Welt, Steuerung – siehe [WORLD2.md](WORLD2.md) |
 | `rubine/training/curriculum.py` | 8 Aufgabenfamilien × 3 Schwierigkeiten mit Generator, Musterlösung und programmatischem Prüfer; Curriculum-Stufen |
 | `rubine/training/evalset.py` | Eingefrorener, gehashter Testdatensatz aus separatem Seed-Namensraum |
 | `rubine/training/data.py` | Beispiel-Pool mit Herkunft, Sicherheitsfilter, Import, versionierte Datensatz-Snapshots |
@@ -65,5 +66,7 @@ data/datasets/ds-XXXX/      train.jsonl + manifest.json (SHA-256, Herkunft, Para
 data/models/rv-XXXX/adapter LoRA-Adapter + training_summary.json
 data/eval/eval-v1.jsonl     eingefrorener Testdatensatz; data/eval/runs/ Einzelergebnisse
 data/jobs/<job>/            Log und Checkpoints
+data/worlds/<id>/world.db   World 2.0: Snapshots, Ereignisse, Gedächtnisarchiv, Entscheidungen, Statistik (+ backups/)
+data/worlds/registry.json   Liste der Welten und aktive Welt
 data/seed/                  mitgelieferte, von Claude Code geschriebene Seed-Daten (im Git)
 ```

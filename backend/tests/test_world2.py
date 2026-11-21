@@ -327,3 +327,28 @@ def test_simulation_export_is_verified_and_excludes_eval():
         rows = s.query(Example).filter(Example.source == "sim_gold").all()
         assert all(r.verified and r.status == "approved" for r in rows)
         assert not {r.prompt_hash for r in rows} & eval_prompt_hashes()
+
+
+def test_government_change_moves_treasury(w):
+    first = next(iter(w.agents.values()))
+    for x in w.agents.values():
+        x["x"], x["y"] = first["x"], first["y"]
+    adults = w.adults(w.home_region(first))
+    idea = {"key": "gov:versammlung", "kind": "regierung", "effect": {"type": "regierung", "params": {"form": "versammlung"}},
+            "title": "Versammlung", "weight": 1, "reason": "t"}
+    p = S.make_proposal(w, adults[0], idea)
+    p["votes"] = {a["id"]: "ja" for a in adults}
+    w.tick = p["closes"]
+    S.close_proposals(w)
+    gov = S.government_of(w, w.home_region(first))
+    assert gov and gov["form"] == "versammlung"
+    w.produce(("inst", gov["id"]), "food", 7, "test")
+    idea2 = dict(idea, key="wechsel:rat", kind="regierungswechsel", effect={"type": "regierung", "params": {"form": "rat"}})
+    p2 = S.make_proposal(w, adults[1], idea2)
+    p2["votes"] = {a["id"]: "ja" for a in adults}
+    w.tick = p2["closes"]
+    S.close_proposals(w)
+    new = S.government_of(w, w.home_region(first))
+    assert new["form"] == "rat" and new["id"] != gov["id"] and not gov["active"]
+    assert w.qty(("inst", new["id"]), "food") == 7 and w.audit()["ok"]
+    assert any(p3["kind"] == "wahl" and p3["status"] == "offen" for p3 in w.proposals.values())

@@ -101,3 +101,63 @@ export function FamilyBars({ a, b, labelA, labelB }: { a: Fam; b?: Fam; labelA: 
     </div>
   );
 }
+
+type Series = { name: string; color: string; points: { x: number; y: number | null }[] };
+
+/** Generic line chart (1–2 series, one y-axis) with crosshair tooltip and legend for ≥2 series. */
+export function LineChart({ series, height = 150, xLabel, yFormat = (v) => String(Math.round(v * 100) / 100), yMin }: {
+  series: Series[]; height?: number; xLabel?: (x: number) => string; yFormat?: (v: number) => string; yMin?: number;
+}) {
+  const ref = useRef<SVGSVGElement>(null);
+  const [hx, setHx] = useState<number | null>(null);
+  const W = 600, H = height, padL = 44, padR = 10, padT = 10, padB = 22;
+  const all = series.flatMap((s) => s.points.filter((p): p is { x: number; y: number } => p.y != null && Number.isFinite(p.y)));
+  if (all.length < 2) return <div className="grid place-items-center text-[13px] text-fg-3" style={{ height }}>Noch zu wenige Messpunkte</div>;
+  const x0 = Math.min(...all.map((p) => p.x)), x1 = Math.max(...all.map((p) => p.x), x0 + 1);
+  const lo = yMin ?? Math.min(0, ...all.map((p) => p.y)), hi = Math.max(...all.map((p) => p.y)) * 1.08 || 1;
+  const sx = (x: number) => padL + ((x - x0) / (x1 - x0)) * (W - padL - padR);
+  const sy = (y: number) => padT + (1 - (y - lo) / (hi - lo || 1)) * (H - padT - padB);
+  const xs = [...new Set(all.map((p) => p.x))].sort((a, b) => a - b);
+  function onMove(e: React.PointerEvent) {
+    const r = ref.current!.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let best = xs[0];
+    for (const x of xs) if (Math.abs(sx(x) - px) < Math.abs(sx(best) - px)) best = x;
+    setHx(best);
+  }
+  return (
+    <div className="relative">
+      {series.length > 1 && (
+        <div className="mb-1.5 flex flex-wrap gap-3 text-[12px] text-fg-2">
+          {series.map((s) => <span key={s.name} className="flex items-center gap-1.5"><span className="h-2 w-3 rounded-sm" style={{ background: s.color }} />{s.name}</span>)}
+        </div>
+      )}
+      <svg ref={ref} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full touch-none" style={{ height }}
+        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHx(null)} role="img">
+        {[0, 0.5, 1].map((f) => {
+          const y = lo + f * (hi - lo);
+          return <g key={f}><line x1={padL} x2={W - padR} y1={sy(y)} y2={sy(y)} stroke="rgba(255,255,255,0.07)" vectorEffect="non-scaling-stroke" />
+            <text x={padL - 6} y={sy(y)} fontSize={11} textAnchor="end" dominantBaseline="middle" fill="rgba(235,235,245,0.38)">{yFormat(y)}</text></g>;
+        })}
+        <text x={padL} y={H - 5} fontSize={11} fill="rgba(235,235,245,0.38)">{xLabel ? xLabel(x0) : x0}</text>
+        <text x={W - padR} y={H - 5} fontSize={11} textAnchor="end" fill="rgba(235,235,245,0.38)">{xLabel ? xLabel(x1) : x1}</text>
+        {series.map((s) => {
+          const pts = s.points.filter((p) => p.y != null) as { x: number; y: number }[];
+          return <path key={s.name} d={pts.map((p, i) => `${i ? "L" : "M"}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(" ")}
+            fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />;
+        })}
+        {hx != null && <line x1={sx(hx)} x2={sx(hx)} y1={padT} y2={H - padB} stroke="rgba(255,255,255,0.25)" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {hx != null && (
+        <div className="pointer-events-none absolute top-6 rounded-lg border border-white/10 bg-[#16161f]/95 px-2.5 py-1.5 text-[12px] shadow-lg"
+          style={{ left: `clamp(0px, calc(${(sx(hx) / W) * 100}% - 60px), calc(100% - 140px))` }}>
+          <div className="text-fg-3">{xLabel ? xLabel(hx) : hx}</div>
+          {series.map((s) => {
+            const p = s.points.find((q) => q.x === hx);
+            return <div key={s.name} className="tabular-nums text-fg">{s.name}: {p?.y != null ? yFormat(p.y) : "—"}</div>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

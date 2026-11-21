@@ -394,7 +394,8 @@ def _institution_options(w: World, a: dict, out: list, region: int, gov: dict | 
         if fit > 0.3 and f"inst:{inst['id']}" in a["facts"]:
             out.append(opt("join", f"{inst['name']} beitreten", fit, target=inst["id"], dur=1))
             break
-    # founding private organisations (no vote needed)
+    # founding private organisations (no vote needed); one per type and home region
+    region = w.home_region(a)
     if "schrift" in a["techs"] and p["curiosity"] + p["extraversion"] > 1.2 and \
             not any(i["type"] == "zeitung" and i["region"] == region and i["active"] for i in w.institutions.values()) and w.day > 7:
         out.append(opt("join", "Eine Zeitung gründen", 0.2 + 0.2 * p["curiosity"], data={"found": "zeitung"}, dur=1))
@@ -804,6 +805,8 @@ def _c_notices(w, a, act):
 def _c_join(w, a, act):
     found = act["data"].get("found")
     region = w.home_region(a)
+    if found and any(i["type"] == found and i["region"] == region and i["active"] for i in w.institutions.values()):
+        return  # someone else was faster
     if found:
         iid = w.new_id("I")
         name = f"{R.PRIVATE_ORGS[found]} von {a['name']}"

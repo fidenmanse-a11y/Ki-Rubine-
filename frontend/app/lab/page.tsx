@@ -35,10 +35,11 @@ type Example = { id: string; messages: { role: string; content: string }[]; resp
 const SOURCE_LABEL: Record<string, string> = {
   synthetic_gold: "Synthetisch (verifiziert)", agent_verified: "Agenten (verifiziert)", teacher_local: "Lokaler Lehrer",
   teacher_api: "API-Lehrer", manual_import: "Manueller Import", user_chat: "Nutzer-Chats (mit Zustimmung)",
+  sim_gold: "Simulation (verifiziert)", sim_agent: "Simulation: Agententexte (Prüfung nötig)",
 };
 const JOB_LABEL: Record<string, string> = {
   train: "Training", evaluate: "Evaluation", compare: "Modellvergleich", synthetic: "Synthetische Daten",
-  build_dataset: "Datensatz bauen", teacher: "Lehrer-Daten",
+  build_dataset: "Datensatz bauen", teacher: "Lehrer-Daten", sim_export: "Simulationsdaten",
 };
 
 export default function LabPage() {
@@ -422,6 +423,14 @@ function DataSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
           <div className="flex gap-2">
             <input type="number" className={inputCls} value={n} min={1} max={20000} onChange={(e) => setN(Number(e.target.value))} />
             <Button onClick={() => run(() => api("/api/lab/data/synthetic", { method: "POST", json: { n } }), "Erzeugung gestartet")}>Erzeugen</Button>
+          </div>
+        </Card>
+        <Card title="Aus Rubine World">
+          <p className="mb-2 text-[13px] text-fg-3">Verifizierbare Aufgaben aus echten Simulationsereignissen (Tauschpreise, Abstimmungen, Vorräte,
+            Behauptung vs. Beobachtung). Antworten berechnet die World Engine; Testaufgaben aus der separaten Evaluationswelt sind ausgeschlossen.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => run(() => api("/api/lab/data/simulation", { method: "POST", json: { per_family: 60 } }), "Simulations-Export gestartet")}>Verifizierte Aufgaben exportieren</Button>
+            <Button variant="ghost" onClick={() => run(() => api("/api/lab/data/simulation", { method: "POST", json: { per_family: 60, include_dialogs: true } }), "Export inkl. Dialoge gestartet (Dialoge warten auf Prüfung)")}>+ Dialoge zur Prüfung</Button>
           </div>
         </Card>
         <Card title="Seed-Daten (von Claude Code erstellt)">

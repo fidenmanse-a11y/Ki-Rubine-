@@ -1,4 +1,40 @@
-# Ehrlicher Projektstatus (Version 0.1.0, 21.11.2026)
+# Ehrlicher Projektstatus (Version 0.2.0 „World 2.0“, 21.11.2026)
+
+## Rubine World 2.0 – gemessen in dieser Umgebung (4 CPU-Kerne, keine GPU)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Automatische Tests | **110 bestanden** (davon 31 für World 2.0: Wirtschaft, Gesellschaft, Bewohner, Welt, Persistenz, API, Export), 1 optionaler Echtmodell-Test separat bestanden |
+| Engine-Geschwindigkeit (nur Regeln) | 360–380 Ticks/s über 5 Jahre (100× benötigt 6,7 Ticks/s) |
+| Langläufe (nur Regeln) | Seeds 21 und 22 je 5 Jahre, Seed 23 über **12 Jahre** (32 256 Ticks in 88 s): **0 Fehler, Stoffbilanz exakt ausgeglichen** |
+| Neustart | Snapshot laden und weiterlaufen ist **bitgenau identisch** zum ununterbrochenen Lauf (Test); Server-Neustart setzt die laufende Welt fort |
+| Speicherbedarf | nach 5 Jahren ≈ 420 KB komprimierter Snapshot, ≈ 6 600 Ereignisse, ≈ 28 000 Entscheidungen in der Welt-DB |
+| Sprachmodell als „Denken“ | echte Entscheidungen, Dialoge, Benennungen mit Qwen2.5-0.5B (Basis) im laufenden Server beobachtet; bei 1× und CPU ≈ 1 Antwort pro 5–10 s |
+| iPhone-Ansicht | Karte (Pinch/Pan, Tag-Nacht, Regen/Schnee nur wo es simuliert regnet), Inspektor, Feed, Panels in Chromium mit iPhone-14-Emulation geprüft |
+
+**Beobachtete emergente Verläufe** (nicht vorprogrammiert, gleicher Code, unterschiedliche Seeds):
+- Seed 21: zuerst Versammlungsdemokratie, später durch einen gewählten Rat ersetzt; zwei Regionen mit je eigenem Rat und eigener
+  Währung; Gesetze zu Eigentumsschutz und Gesundheitsversorgung; ein Ressourcenschutzgesetz wurde beschlossen und wieder aufgehoben;
+  Schulen, Gericht, Gesundheitsamt; 16 Rechtsfälle (meist Verstöße gegen den Ressourcenschutz).
+- Seed 22: Versammlung → Rat; 5 Jahre **ohne ein einziges Gesetz**; eine Währung; 5 Todesfälle (Krankheit, Kälte, Wassermangel).
+- Seed 23: im ersten Jahr ein Rat, der durch eine Versammlungsdemokratie ersetzt wurde, die danach 12 Jahre bestand; Gesetze zu
+  Gesundheitsversorgung und Eigentumsschutz; Ungleichheit (Gini) stieg von 0,28 auf bis zu 0,44; 12 Geburten, 11 Todesfälle.
+- Knappheitsexperiment (Naturnahrung auf 15 %): 18 von 25 Bewohnern verhungerten in 2 Jahren; ein Diebstahl, danach beschlossen
+  die Bewohner einen Eigentumsschutz.
+
+**Ehrliche Einschränkungen von World 2.0**
+- In den Langläufen mit normalen Ressourcen kam es zu **keinem Diebstahl und keiner Gewalt** – Not war zu selten. Die Mechanismen
+  (Tat, Zeugen, falsche Beschuldigung, Ermittlung, Urteil, Sanktion) sind per Test und im Knappheitsexperiment geprüft.
+- Generationen: In 12 Jahren erreichten die ersten Kinder noch nicht das Erwachsenenalter (18 Jahre ≈ 2 Stunden reine Rechenzeit bzw. ≈ 2 Tage bei 100×).
+  Die Übergabe an Erwachsene ist getestet, aber noch nicht in einem Langlauf beobachtet.
+- Langläufe liefen **ohne Sprachmodell**. Mit Modell treffen die Bewohner bei knappen, bedeutsamen Entscheidungen Modellwahlen –
+  auf der CPU aber nur einen kleinen Teil; der Rest bleibt regelbasiert und ist so markiert.
+- Getestet bis ca. 35 Bewohner. Größere Populationen sind konfigurierbar, aber nicht erprobt.
+- Details und weitere Grenzen: [WORLD2.md](WORLD2.md).
+
+---
+
+# Status von Rubine 0.1 (Chat, Training, AI Lab)
 
 Diese Datei trennt strikt zwischen **ausgeführt und überprüft**, **implementiert, aber nicht ausgeführt** und **nicht vorhanden**.
 Entwickelt und getestet wurde in einer Linux-Umgebung (Python 3.13, 4 CPU-Kerne, 15 GB RAM, **keine GPU**).
