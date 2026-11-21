@@ -1,0 +1,4 @@
+# Optional: API-based teacher (Anthropic). Requires your own paid API key.
+anthropic>=1.0
+# Optional: PostgreSQL instead of SQLite
+psycopg[binary]>=3.2

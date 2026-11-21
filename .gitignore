@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Node / Next
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# Rubine runtime data (models, datasets, DB, secrets) – never commit
+data/*
+!data/seed/
+!data/README.md
+.env
+*.pem
+*.key
+*.crt
+
+# OS
+.DS_Store
+Thumbs.db

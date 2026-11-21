@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>Rubine – offline</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #000; color: #f5f5f7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+    body { display: grid; place-items: center; padding: max(env(safe-area-inset-top), 24px) 28px; box-sizing: border-box; text-align: center; }
+    .glow { position: fixed; inset: -20% -10% auto; height: 60vh; pointer-events: none;
+      background: radial-gradient(40% 50% at 30% 30%, rgba(139,92,246,.22), transparent 70%), radial-gradient(35% 45% at 80% 15%, rgba(59,130,246,.16), transparent 70%); filter: blur(20px); }
+    h1 { font-size: 24px; margin: 22px 0 8px; letter-spacing: -0.01em; }
+    p { color: rgba(235,235,245,.62); font-size: 15px; line-height: 1.5; max-width: 320px; margin: 0 auto; }
+    button { margin-top: 26px; height: 48px; padding: 0 26px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12);
+      background: linear-gradient(135deg,#8b5cf6,#6366f1 45%,#3b82f6); color: #fff; font: 600 16px inherit; }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <main style="position:relative">
+    <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset=".5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>
+      <path d="M20 8h24l14 16-26 32L6 24 20 8Z" fill="url(#g)"/>
+    </svg>
+    <h1>Du bist offline</h1>
+    <p>Rubine läuft auf deinem PC. Sobald dein iPhone den Rubine-Server wieder erreicht, geht es weiter – deine Chats sind dort sicher gespeichert.</p>
+    <button onclick="location.href='/'">Erneut verbinden</button>
+  </main>
+</body>
+</html>
