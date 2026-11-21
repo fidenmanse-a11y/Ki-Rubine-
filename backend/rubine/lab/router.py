@@ -21,7 +21,7 @@ from ..llm.engine import get_engine
 from ..security.auth import require_auth
 from ..training import curriculum as cur
 from ..training import data as data_mod
-from ..training.evalset import EVAL_SET_ID, ensure_eval_set
+from ..training.evalset import combined_id, eval_set_info
 from ..training.teachers import list_teachers
 from ..training.trainer import TrainConfig
 
@@ -262,10 +262,19 @@ def evals(s: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.get("/evalset")
-def evalset_info() -> dict:
-    path, sha = ensure_eval_set()
-    n = sum(1 for l in path.read_text(encoding="utf-8").splitlines() if l.strip())
-    return {"id": EVAL_SET_ID, "sha256": sha, "n": n, "families": sorted(cur.FAMILIES)}
+def evalset() -> dict:
+    return {"id": combined_id(), "sets": eval_set_info()}
+
+
+class SimExportRequest(BaseModel):
+    per_family: int = Field(default=60, ge=1, le=1000)
+    include_dialogs: bool = False
+    seed: int = 1
+
+
+@router.post("/data/simulation")
+def sim_export(body: SimExportRequest) -> dict:
+    return _submit("sim_export", body.model_dump())
 
 
 # ------------------------------------------------------------------ data

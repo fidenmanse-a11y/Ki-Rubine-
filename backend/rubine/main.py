@@ -26,6 +26,7 @@ from .security.auth import (COOKIE_NAME, check_password, issue_token, login_limi
                             require_auth, token_from_request, verify_token)
 from .security.logging_setup import setup_logging
 from .world.router import router as world_router
+from .world2.api import router as world2_router
 
 log = logging.getLogger("rubine")
 
@@ -41,8 +42,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_db()
     with session_scope() as s:
         registry.ensure_base_version(s)
-    from .training.evalset import ensure_eval_set
-    ensure_eval_set()
+    from .training.evalset import load_eval_set
+    await asyncio.to_thread(load_eval_set)  # creates frozen eval sets on first start
     eng = get_engine()
     if st.load_model_on_startup:
         eng.start_loading()
@@ -50,6 +51,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         eng.status = "disabled"
     manager = get_manager()
     manager.start()
+    world2 = None
+    if st.world2_enabled:
+        from .world2.service import WorldService, set_service
+        world2 = WorldService(use_llm=st.world2_llm)
+        set_service(world2)
+        await asyncio.to_thread(world2.boot)
+        if st.world2_autostart and not world2.stopped:
+            world2.start()
     world = None
     if st.sim_enabled:
         from .world.simulation import get_world
@@ -58,6 +67,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if not st.sim_autostart:
             world.running = False
     yield
+    if world2 is not None:
+        await asyncio.to_thread(world2.shutdown)
     if world is not None:
         await world.shutdown()
     await asyncio.to_thread(manager.shutdown)
@@ -135,6 +146,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(models_router)
     app.include_router(world_router)
+    app.include_router(world2_router)
     app.include_router(lab_router)
 
     # ---- static PWA (Next.js export) ----

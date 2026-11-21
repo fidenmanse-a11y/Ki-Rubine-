@@ -57,8 +57,13 @@ class Settings(BaseSettings):
     max_context_tokens: int = 3072
     max_loaded_adapters: int = 4
 
-    # --- Simulation --------------------------------------------------------
-    sim_enabled: bool = True
+    # --- Rubine World 2.0 (society simulation) --------------------------------
+    world2_enabled: bool = True
+    world2_autostart: bool = True
+    world2_llm: bool = True  # residents may use the Rubine model for significant decisions
+
+    # --- Classic simulation (v0.1 Smallville town; opt-in since 0.2) --------
+    sim_enabled: bool = False
     sim_autostart: bool = True
     sim_tick_seconds: float = 2.0
     sim_minutes_per_tick: int = 10
@@ -88,6 +93,11 @@ class Settings(BaseSettings):
     # fraction of a dataset. The rest must come from independent sources.
     max_self_generated_fraction: float = 0.5
     eval_set_size: int = 64
+    # Frozen evaluation sets used for every comparison. eval-sim-v1 comes from a held-out
+    # simulation world (separate seed) and tests simulation-grounded skills.
+    eval_sets: str = "eval-v1,eval-sim-v1"
+    eval_sim_size: int = 32
+    eval_sim_days: int = 40
     # Promotion gate: candidate must reach >= parent accuracy + min_delta
     gate_min_delta: float = 0.0
     # ... and no task family may drop by more than this (absolute).

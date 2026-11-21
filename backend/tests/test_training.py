@@ -137,3 +137,13 @@ def test_real_model_learns(tmp_path, monkeypatch):
     cfg = TrainConfig(max_steps=20, epochs=3, batch_size=4, learning_rate=2e-4, seed=1, save_every=0)
     s = train_lora(rows=rows, cfg=cfg, out_dir=tmp_path / "o", ckpt_dir=tmp_path / "c", settings=st)
     assert s["mean_loss_last10"] < s["mean_loss_first10"] * 0.7
+
+
+def test_training_actually_changes_parameters(tmp_path):
+    """LoRA B matrices start at zero; after training they must be non-zero (weights really changed)."""
+    from safetensors.torch import load_file
+    cfg = TrainConfig(max_steps=3, batch_size=4, learning_rate=1e-3, seed=4, save_every=0)
+    train_lora(rows=ROWS, cfg=cfg, out_dir=tmp_path / "o", ckpt_dir=tmp_path / "c")
+    tensors = load_file(str(tmp_path / "o" / "adapter_model.safetensors"))
+    b_mats = [t for k, t in tensors.items() if "lora_B" in k]
+    assert b_mats and all(float(t.abs().sum()) > 0 for t in b_mats)

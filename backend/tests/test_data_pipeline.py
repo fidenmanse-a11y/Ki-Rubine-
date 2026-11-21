@@ -18,7 +18,8 @@ def clean_pool():
 def test_eval_set_frozen_and_hashed():
     a, sha1 = load_eval_set()
     b, sha2 = load_eval_set()
-    assert a == b and sha1 == sha2 and len(a) == 16
+    assert a == b and sha1 == sha2 and len(a) == 16 + 8
+    assert {t['family'] for t in a} & {'sim_trade', 'sim_vote', 'sim_supply', 'sim_factcheck'}
 
 
 def test_synthetic_examples_are_verified_and_exclude_eval():

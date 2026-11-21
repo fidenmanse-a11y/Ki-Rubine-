@@ -24,7 +24,7 @@ from ..llm import registry
 from ..security.logging_setup import setup_logging
 from ..training import curriculum as cur
 from ..training import data as data_mod
-from ..training.evalset import EVAL_SET_ID, eval_prompt_hashes, load_eval_set
+from ..training.evalset import combined_id, eval_prompt_hashes, load_eval_set
 from ..training.teachers import get_teacher
 from .context import JobContext, JobStopped
 
@@ -91,12 +91,12 @@ def evaluate_versions(ctx: JobContext, version_ids: list[str], *, force: bool = 
         except InterruptedError:
             raise JobStopped()
         res["eval_loss"] = eval_loss(model, tok, items, device, use_adapter=use_adapter)
-        res.update(version_id=vid, eval_set_id=EVAL_SET_ID, eval_set_sha256=sha)
+        res.update(version_id=vid, eval_set_id=combined_id(), eval_set_sha256=sha)
         path = _eval_cache_path(vid, sha)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
         with session_scope() as s:
-            run = EvalRun(version_id=vid, eval_set_id=EVAL_SET_ID, eval_set_sha256=sha, accuracy=res["accuracy"],
+            run = EvalRun(version_id=vid, eval_set_id=combined_id()[:40], eval_set_sha256=sha, accuracy=res["accuracy"],
                           eval_loss=res["eval_loss"], n=res["n"], per_family=res["per_family"],
                           results_path=str(path), job_id=ctx.job_id)
             s.add(run)
@@ -280,7 +280,30 @@ def run_compare(ctx: JobContext, p: dict) -> dict:
             "only_b_correct": sum(1 for d in diffs if d["b"]["correct"]), "diffs": diffs[:60]}
 
 
+def run_sim_export(ctx: JobContext, p: dict) -> dict:
+    """Export verified simulation tasks from the active (or given) world into the example pool."""
+    from ..world2.service import load_registry, world_dir
+    from ..world2.store import WorldStore
+    from ..world2.export import export_to_pool
+    world_id = p.get("world_id") or load_registry().get("active")
+    if not world_id:
+        raise ValueError("Keine Simulationswelt vorhanden")
+    store = WorldStore(world_dir(world_id) / "world.db")
+    ctx.status("Lade Weltzustand …")
+    w = store.load_latest()
+    if w is None:
+        raise ValueError("Welt hat keinen Speicherstand")
+    events = store.events(kind="tausch,abstimmung,dialog", limit=4000)
+    ctx.status(f"Prüfe {len(events)} Ereignisse und {len(w.cases)} Fälle …")
+    with session_scope() as s:
+        res = export_to_pool(s, w, events, per_family=int(p.get("per_family", 60)), seed=int(p.get("seed", 1)),
+                             include_dialogs=bool(p.get("include_dialogs", False)))
+        audit(s, "data.sim_export", job=ctx.job_id, world=world_id, **{k: v for k, v in res.items() if k != "per_family"})
+    return {"world_id": world_id, "tick": w.tick, **res}
+
+
 HANDLERS: dict[str, Callable[[JobContext, dict], dict]] = {
+    "sim_export": run_sim_export,
     "synthetic": run_synthetic, "build_dataset": run_build_dataset, "teacher": run_teacher,
     "train": run_train, "evaluate": run_evaluate, "compare": run_compare,
 }

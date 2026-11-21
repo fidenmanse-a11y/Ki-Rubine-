@@ -18,9 +18,10 @@ from ..security.sanitize import is_clean_for_training, strip_control
 from . import curriculum as cur
 from .evalset import eval_prompt_hashes
 
-SOURCES = {"synthetic_gold", "agent_verified", "teacher_local", "teacher_api", "manual_import", "user_chat"}
+SOURCES = {"synthetic_gold", "agent_verified", "teacher_local", "teacher_api", "manual_import", "user_chat",
+           "sim_gold", "sim_agent"}
 # Examples produced by Rubine itself (via the agents). Capped per dataset.
-SELF_GENERATED = {"agent_verified"}
+SELF_GENERATED = {"agent_verified", "sim_agent"}
 
 
 class DataError(ValueError):
