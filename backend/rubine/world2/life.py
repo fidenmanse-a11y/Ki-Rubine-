@@ -147,6 +147,9 @@ def daily_health(w: World) -> None:
                 eid = w.emit("leben", "erkrankung", f"{a['name']} ist an {name} erkrankt.", actors=[a["id"]],
                              x=a["x"], y=a["y"], public=False, witnesses=False)
                 w.remember(a, "gesundheit", f"Ich bin an {name} erkrankt.", 6, event=eid, tags=["krankheit"])
+                from .cognition import notify
+                notify(w, a, "erkrankt", factors={"hunger": 2 * n["hunger"], "kaelte": 1.5 * a["exposure"], "stress": 1.5 * n["stress"],
+                                                  "wasser": no_water, "ansteckung": 1.5 * contagion * 0.3})
         # natural mortality hazard (per year, converted per day), rises with age and poor health
         hazard_year = 0.0006 * math.exp(0.085 * age) * (1 + 2.5 * (1 - a["health"]))
         if age > 1 and w.chance(hazard_year / R.DAYS_PER_YEAR):
@@ -239,6 +242,8 @@ def process_births(w: World) -> None:
             p["bio"].append([w.tick, f"Kind {child['name']} geboren."])
             w.remember(p, "biografie", f"Unser Kind {child['name']} wurde geboren.", 9, event=eid, subjects=[child["id"]],
                        tags=["familie"])
+            from .cognition import notify
+            notify(w, p, "geburt")
 
 
 def daily_growth(w: World) -> None:

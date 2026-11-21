@@ -185,9 +185,20 @@ class Mind:
         if not a or not a["alive"]:
             return None
         what = {"siedlung": "die neue Siedlung, in der du lebst", "waehrung": "die neue gemeinsame Währung",
-                "institution": "deine neu gegründete Organisation", "kunstwerk": "dein neues Werk"}[kind]
+                "institution": "deine neu gegründete Organisation", "kunstwerk": "dein neues Werk",
+                "buendnis": "das Bündnis, das du mit Freunden gegründet hast"}[kind]
         user = f"Gib {what} einen kurzen Namen (höchstens 4 Wörter). Antworte nur mit dem Namen."
         return self._submit(w, a, "naming", persona_block(w, a), user, 16, {"kind": kind, "ref": ref}, temp=0.9)
+
+    def request_goal(self, w: World, a: dict, goal: dict) -> dict | None:
+        """The model weighs the agent's active goals and phrases why the new one matters (planning summary)."""
+        active = [g for g in a["agenda"] if g["status"] == "aktiv"][:4]
+        if goal not in active:
+            active.append(goal)
+        menu = "\n".join(f"{i + 1}. {g['text']} – {g['why']}" for i, g in enumerate(active))
+        user = (f"Was du weißt:\n{known_context(w, a, 3)}\n\nDeine aktuellen Ziele:\n{menu}\n\nWelches Ziel ist dir jetzt am wichtigsten? "
+                "Antworte genau so:\nWahl: <Nummer>\nWarum: <ein Satz in Ich-Form>")
+        return self._submit(w, a, "goal", persona_block(w, a), user, 60, {"goals": [g["id"] for g in active]}, temp=0.6)
 
     def request_reflection(self, w: World, a: dict) -> dict | None:
         recent = "\n".join(f"- {m['x']}" for m in a["stm"][-8:]) or "- (ruhiger Tag)"
@@ -260,7 +271,8 @@ class Mind:
             if not name or clean.flagged:
                 return
             kind, ref = req["payload"]["kind"], req["payload"]["ref"]
-            coll = {"siedlung": w.settlements, "waehrung": w.currencies, "institution": w.institutions, "kunstwerk": w.artworks}[kind]
+            coll = {"siedlung": w.settlements, "waehrung": w.currencies, "institution": w.institutions, "kunstwerk": w.artworks,
+                    "buendnis": w.alliances}[kind]
             obj = coll.get(ref)
             if obj:
                 key = "title" if kind == "kunstwerk" else "name"
@@ -270,6 +282,20 @@ class Mind:
                 w.emit("wissen" if kind == "kunstwerk" else "bau" if kind == "siedlung" else "wirtschaft", "benennung",
                        f"{a['name']} nennt {old} fortan „{name}“.", actors=[a["id"]], data={"kind": kind, "ref": ref,
                        "generated_by": label}, witnesses=False)
+        elif req["kind"] == "goal":
+            m = re.search(r"wahl\s*[:：]?\s*(\d+)", ans, re.IGNORECASE)
+            why = re.search(r"warum\s*[:：]\s*(.+)", ans, re.IGNORECASE)
+            ids = req["payload"]["goals"]
+            idx = int(m.group(1)) - 1 if m else -1
+            if 0 <= idx < len(ids) and not clean.flagged:
+                g = next((x for x in a["agenda"] if x["id"] == ids[idx]), None)
+                if g:
+                    g["prio"] = round(min(1.0, g["prio"] + 0.15), 3)
+                    g["by"] = label
+                    g["motivation"] = sanitize_text(why.group(1), 200).text if why else None
+                    _log_decision(w, a, "ziel", label, req["model"], [], g["text"], g.get("motivation") or "")
+            else:
+                self.stats["invalid"] += 1
         elif req["kind"] == "reflection":
             if clean.flagged or not clean.text:
                 return

@@ -7,6 +7,7 @@ at high speed the engine simply runs as fast as it can (time dilation is reporte
 from __future__ import annotations
 
 from . import actions as A
+from . import cognition, social3
 from . import env, life
 from . import rules as R
 from . import society as S
@@ -36,6 +37,11 @@ def step(w: World) -> None:
             a["action"], a["path"], a["pending"] = None, [], None
     if w.tick % R.TICKS_PER_HOUR == 0:
         S.close_proposals(w)
+        for a in w.living():
+            try:
+                cognition.hourly(w, a)
+            except Exception as e:  # noqa: BLE001
+                w.error(f"cognition {a['id']}", e)
     if tod == 48:  # 18:00
         pay_wages(w)
     if tod == 64:  # 22:00
@@ -141,6 +147,7 @@ def _daily(w: World) -> None:
     S.daily_politics(w)
     S.daily_justice(w)
     S.festivals_today(w)
+    social3.daily(w)
     check_loans(w)
     detect_settlements(w)
     for a in w.living():
@@ -148,6 +155,7 @@ def _daily(w: World) -> None:
         a["satisfaction"] = S.satisfaction(w, a)
         _personality_drift(w, a)
         perceive(w, a, 5)
+        cognition.daily(w, a)
         _morning_intention(w, a)
     _record_stats(w)
     w.daily.clear()

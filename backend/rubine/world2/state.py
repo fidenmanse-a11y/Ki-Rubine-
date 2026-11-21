@@ -52,6 +52,10 @@ class World:
         self.settlements: dict[str, dict] = {}
         self.traditions: dict[str, dict] = {}
         self.relations: dict[str, dict] = {}
+        self.promises: dict[str, dict] = {}
+        self.rumors: dict[str, dict] = {}
+        self.alliances: dict[str, dict] = {}
+        self.feuds: dict[str, dict] = {}
         self.markets: dict[str, dict] = {}       # region index (str) -> item -> price info
         self.weather: dict[str, dict] = {}       # region index (str) -> weather
         self.river_level = 0.3
@@ -351,7 +355,9 @@ def _b64_to_arr(s: str) -> np.ndarray:
 
 SIMPLE_FIELDS = ["world_id", "name", "seed", "tick", "w", "h", "region_names", "agents", "buildings", "sites",
                  "institutions", "laws", "proposals", "contracts", "currencies", "cases", "documents", "artworks",
-                 "settlements", "traditions", "relations", "markets", "weather", "river_level", "config"]
+                 "settlements", "traditions", "relations", "markets", "weather", "river_level", "config",
+                 "promises", "rumors", "alliances", "feuds"]
+OPTIONAL_FIELDS = {"promises": dict, "rumors": dict, "alliances": dict, "feuds": dict}
 
 
 def to_snapshot(w: World) -> dict:
@@ -369,7 +375,7 @@ def from_snapshot(d: dict) -> World:
     import ast
     w = World()
     for k in SIMPLE_FIELDS:
-        setattr(w, k, d[k])
+        setattr(w, k, d[k] if k in d else OPTIONAL_FIELDS[k]())
     w.counters = Counter(d["counters"])
     w.ledger = {k: Counter(v) for k, v in d["ledger"].items()}
     w.totals = Counter(d.get("totals", {}))

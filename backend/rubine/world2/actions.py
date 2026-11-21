@@ -103,6 +103,8 @@ def generate_options(w: World, a: dict) -> list[dict]:
         out.append(opt("rest", "Zu Hause aufwärmen", 2.2 * a["exposure"], dest=(home["x"], home["y"]), target=home["id"], dur=4))
     if arrested:
         return [o for o in out if o["type"] in ("eat", "sleep", "rest")] or [opt("rest", "Im Arrest", 1, dur=4)]
+    if a.get("prison"):
+        return _prison_options(w, a, out)
     if _banned_here(w, a, a["x"], a["y"]):
         out.append(opt("leave", "Die Region verlassen (verbannt)", 4.0, dur=1))
     if night and not a["personality"]["extraversion"] > 0.85:
@@ -231,6 +233,16 @@ def generate_options(w: World, a: dict) -> list[dict]:
 
     # --- deviance (possible, never forced)
     _deviance_options(w, a, out, fd, gov)
+
+    # --- World 3.0: social strategy, institutions at work, plans
+    from . import social3
+    out += social3.promise_options(w, a, opt)
+    out += social3.alliance_options(w, a, opt)
+    _social3_options(w, a, out, gov)
+    _role_options(w, a, out, region)
+    _plan_specific_options(w, a, out, home)
+    from .cognition import apply_goal_bonus
+    apply_goal_bonus(w, a, out)
 
     # daily intention (focus) tilts categories
     focus = (a.get("intention") or {}).get("focus")
@@ -451,13 +463,15 @@ def _deviance_options(w: World, a: dict, out: list, fd: float, gov: dict | None)
     p = a["personality"]
     desperate = clamp((a["needs"]["hunger"] - 0.5) * 2) * clamp(1 - fd)
     greed = a["values"]["wealth"] * (1 - p["agreeableness"]) * 0.35
-    drive = (1.8 * desperate + greed) * (1 - 0.6 * p["self_control"]) * (1 - 0.5 * honesty(a))
+    morals = a.get("morals") or {"ehrlichkeit": honesty(a), "autoritaet": 0.5}
+    drive = (1.8 * desperate + greed) * (1 - 0.6 * p["self_control"]) * (1 - 0.5 * (0.5 * honesty(a) + 0.5 * morals["ehrlichkeit"]))
     if drive < 0.15:
         return
     region = w.region_of(a["x"], a["y"])
     law = S.active_law(w, region, "eigentumsschutz")
-    fear = (0.5 * p["conscientiousness"] if law and S.knows_law(w, a, law) else 0) + \
-        (0.3 if S.institution_of(w, region, "wache") else 0)
+    fear = ((0.3 * p["conscientiousness"] + 0.4 * morals["autoritaet"]) if law and S.knows_law(w, a, law) else 0) + \
+        (0.3 if S.institution_of(w, region, "wache") else 0) + (0.5 if (a.get("probation_until") or 0) > w.tick else 0) + \
+        0.2 * (a.get("convictions", 0) > 0)
     targets = []
     for b in w.agents_near(a["x"], a["y"], 2):
         if b["id"] != a["id"] and (b.get("inv") or {}).get("food", 0) >= 2:
@@ -642,7 +656,7 @@ def _c_eat(w, a, act):
 
 
 def _c_drink(w, a, act):
-    if w.near_water(a["x"], a["y"], 1):
+    if w.near_water(a["x"], a["y"], 1) or a.get("prison"):
         a["needs"]["thirst"] = 0.0
 
 
@@ -711,11 +725,14 @@ def _c_build_start(w, a, act):
     spec = R.BUILDINGS[btype]
     if spec["tech"] and spec["tech"] not in a["techs"]:
         return
-    plot = choose_plot(w, a, btype)
+    far = bool(act["data"].get("far"))
+    plot = choose_plot(w, a, btype, near=(a["x"], a["y"]) if far else None)
     if not plot:
         w.remember(a, "beobachtung", f"Ich fand keinen geeigneten Platz für {spec['label']}.", 3)
         return
     site = start_site(w, btype, plot[0], plot[1], owner=a["id"], by=a["id"], cause=act.get("decision_event"))
+    if far and btype in R.SHELTER_TYPES:
+        site["relocate"] = True
     a["building_plan"] = site["id"]
     deliver(w, a, site) if (a["x"], a["y"]) == plot else None
 
@@ -1098,3 +1115,305 @@ COMPLETE = {"eat": _c_eat, "drink": _c_drink, "rest": _c_rest, "forage": _c_fora
             "work": _c_work, "hire": _c_hire, "partner": _c_partner, "child": _c_child, "steal": _c_steal,
             "embezzle": _c_embezzle, "leave": _c_leave, "school": _c_school, "follow": _c_noop, "play": _c_noop,
             "travel": _c_noop, "think": _c_noop}
+
+
+
+# ------------------------------------------------------------------ World 3.0 options
+def _prison_options(w: World, a: dict, base: list[dict]) -> list[dict]:
+    out = [o for o in base if o["type"] in ("eat", "sleep", "rest")]
+    if a["needs"]["thirst"] > 0.2:
+        out.append(opt("drink", "Wasser in der Zelle", 3.6 * a["needs"]["thirst"] ** 1.6, dur=1))
+    for b in _nearby(w, a, 1):
+        if not b.get("asleep"):
+            out.append(opt("talk", f"Mit {b['name']} reden", 1.2 * a["needs"]["social"] + 0.2, target=b["id"], dur=2))
+            break
+    out.append(opt("rest", "In der Zelle warten", 0.3, dur=4))
+    from .cognition import apply_goal_bonus
+    apply_goal_bonus(w, a, out)
+    return out
+
+
+def _social3_options(w: World, a: dict, out: list, gov: dict | None) -> None:
+    from . import justice
+    from .cognition import honesty_estimate
+    p = a["personality"]
+    near = [b for b in _nearby(w, a, 3) if not b.get("asleep") and w.age(b) >= R.ADULT_AGE]
+    targets = a.get("emo_targets", {})
+    # candidacy in an open election
+    for prop in w.proposals.values():
+        if prop["status"] == "offen" and prop["kind"] == "wahl" and a["id"] not in prop["candidates"] and \
+                prop["region"] == w.home_region(a) and f"prop:{prop['id']}" in a["facts"]:
+            wants = any(g["type"] == "amt" and g["status"] == "aktiv" for g in a["agenda"])
+            out.append(opt("candidate", f"Bei der Wahl kandidieren ({prop['title']})", 0.2 + 0.5 * p["ambition"] + 0.5 * wants,
+                           target=prop["id"], dur=1))
+            break
+    # persuading someone about an open proposal I care about
+    if near:
+        for prop in w.proposals.values():
+            if prop["status"] != "offen" or prop["kind"] == "wahl" or prop["region"] != w.home_region(a):
+                continue
+            mine = prop["proposer"] == a["id"] or prop["votes"].get(a["id"]) == "ja"
+            if not mine:
+                continue
+            for b in near:
+                if b["id"] not in prop["votes"] and b["id"] in {x["id"] for x in S.eligible_voters(w, prop)}:
+                    out.append(opt("persuade", f"{b['name']} von „{prop['title']}“ überzeugen", 0.25 + 0.4 * a["skills"]["leadership"]
+                                   + 0.3 * p["extraversion"], target=b["id"], data={"proposal": prop["id"]}, dur=2))
+                    break
+            break
+    # anger: confront, or (dishonest) spread a false rumour
+    for tid, t in targets.items():
+        other = w.agents.get(tid)
+        if not other or not other["alive"] or t.get("aerger", 0) < 0.45:
+            continue
+        if any(b["id"] == tid for b in near) and p["conflict_avoidance"] < 0.55:
+            out.append(opt("confront", f"{other['name']} zur Rede stellen", 0.2 + 0.6 * t["aerger"] - 0.4 * p["conflict_avoidance"],
+                           target=tid, dur=1))
+        listeners = [b for b in near if b["id"] != tid]
+        if listeners and a["morals"]["ehrlichkeit"] < 0.35:
+            out.append(opt("spread_rumor", f"{listeners[0]['name']} etwas Schlechtes über {other['name']} erzählen",
+                           0.1 + 0.5 * t["aerger"] - 0.6 * a["morals"]["ehrlichkeit"], target=listeners[0]["id"], data={"about": tid}, dur=1))
+        break
+    # apologise to someone who is angry with me
+    for b in near:
+        if b["emo_targets"].get(a["id"], {}).get("aerger", 0) > 0.3 and w.rel(a["id"], b["id"])["familiarity"] > 0.2:
+            out.append(opt("apologize", f"Sich bei {b['name']} entschuldigen", 0.15 + 0.5 * p["agreeableness"]
+                           + 0.4 * a["emo"].get("scham", 0), target=b["id"], dur=1))
+            break
+    # visiting imprisoned family or friends
+    for f in a["friends"] + ([a["partner"]] if a.get("partner") else []) + a["children"]:
+        x = w.agents.get(f or "")
+        if x and x["alive"] and x.get("prison") and x["prison"]["building"] in w.buildings:
+            b = w.buildings[x["prison"]["building"]]
+            out.append(opt("visit", f"{x['name']} im Gefängnis besuchen", 0.3 + 0.4 * w.rel(a["id"], x["id"])["affection"],
+                           dest=(b["x"], b["y"]), target=x["id"], dur=2))
+            break
+    # appeal
+    for c in w.cases.values():
+        if c["accused"] == a["id"] and c["status"] == "schuldig" and not c.get("appeal") and justice.appeal_possible(w, c) and \
+                w.tick - (c.get("verdict") or {}).get("tick", w.tick) < 4 * R.TICKS_PER_DAY:
+            innocent = c.get("true_offender") != a["id"]
+            out.append(opt("appeal", "Berufung einlegen", (1.4 if innocent else 0.2 + 0.4 * (1 - a["morals"]["ehrlichkeit"])),
+                           target=c["id"], dur=1))
+            break
+    # suspicion: avoid trading with people believed dishonest
+    for o in out:
+        if o["type"] == "trade" and o.get("target"):
+            est, unc = honesty_estimate(a, o["target"])
+            o["u"] = round(o["u"] - 0.6 * max(0.0, 0.5 - est) * (1 - unc), 3)
+
+
+def _role_options(w: World, a: dict, out: list, region: int) -> None:
+    """Work at institutions and businesses: teachers, watch, healers, shopkeepers."""
+    if not 8 <= w.hour < 17:
+        return
+    p = a["personality"]
+    for inst in w.institutions.values():
+        if not inst["active"] or a["id"] not in inst.get("members", []) or inst["region"] != w.home_region(a):
+            continue
+        if inst["type"] == "schule":
+            sch = next((b for b in w.buildings.values() if b["type"] == "schule" and b["region"] == inst["region"]), None)
+            if sch and sch.get("teacher_day") != w.day:
+                out.append(opt("unterrichten", "In der Schule unterrichten", 0.6 + 0.4 * p["conscientiousness"], dest=(sch["x"], sch["y"]),
+                               target=sch["id"], dur=8))
+        elif inst["type"] == "wache":
+            out.append(opt("patrol", "Streife gehen", 0.35 + 0.4 * a["values"]["security"], dur=4, data={"inst": inst["id"]}))
+        elif inst["type"] == "heilwesen":
+            hh = next((b for b in w.buildings.values() if b["type"] in ("heilhaus", "krankenhaus") and b["region"] == inst["region"]), None)
+            if hh and any(x.get("illness") for x in w.living()):
+                out.append(opt("duty", f"Dienst im {R.BUILDINGS[hh['type']]['label']}", 0.5 + 0.4 * a["skills"]["healing"],
+                               dest=(hh["x"], hh["y"]), target=hh["id"], dur=6))
+    shop = next((b for b in w.buildings.values() if b["type"] == "laden" and b.get("owner") == a["id"]), None)
+    if shop and (a.get("inv") or {}):
+        out.append(opt("shopkeep", "Den Laden führen", 0.5 + 0.4 * a["values"]["wealth"], dest=(shop["x"], shop["y"]), target=shop["id"], dur=6))
+    if not shop:
+        for b in w.buildings.values():
+            if b["type"] != "laden" or b["region"] != region:
+                continue
+            keeper = w.agents.get(b.get("owner") or "")
+            if keeper and keeper["alive"] and (keeper["x"], keeper["y"]) == (b["x"], b["y"]) and dist(a["x"], a["y"], b["x"], b["y"]) < 14:
+                need = clamp(1 - food_days(w, a) / 4)
+                out.append(opt("shop", f"Im Laden von {keeper['name']} einkaufen", 0.2 + 0.7 * need, dest=(b["x"], b["y"]), target=keeper["id"], dur=1))
+                break
+    # paving busy paths (traffic is real movement data)
+    tr = w.map.get("traffic")
+    if tr is not None and tr[a["y"], a["x"]] > 30 and not w.map["road"][a["y"], a["x"]] and (a.get("inv") or {}).get("stone", 0) >= 1 \
+            and w.passable(a["x"], a["y"]) and not any((s["x"], s["y"]) == (a["x"], a["y"]) for s in w.sites.values()) \
+            and not any((b["x"], b["y"]) == (a["x"], a["y"]) for b in w.buildings.values()):
+        out.append(opt("pave", "Den viel begangenen Weg pflastern", 0.15 + 0.4 * a["values"]["community"], dur=1))
+
+
+def _plan_specific_options(w: World, a: dict, out: list, home: dict | None) -> None:
+    from .cognition import current_step
+    for g in a["agenda"]:
+        if g["status"] != "aktiv":
+            continue
+        s = current_step(g)
+        if not s:
+            continue
+        if "explore" in s["acts"]:
+            out.append(opt("explore", "Ein neues Gebiet erkunden", 0.3, data={"far": True}, dur=1))
+        if "build_start" in s["acts"] and not a.get("building_plan"):
+            btype = (s.get("data") or {}).get("btype")
+            if btype and (R.BUILDINGS[btype]["tech"] is None or R.BUILDINGS[btype]["tech"] in a["techs"]) and \
+                    not any(o["type"] == "build_start" and o["data"].get("btype") == btype for o in out):
+                far = bool((s.get("data") or {}).get("far"))
+                out.append(opt("build_start", f"{R.BUILDINGS[btype]['label']} beginnen" + (" (neuer Ort)" if far else ""), 0.4,
+                               data={"btype": btype, "far": far}, dur=1))
+    resources_needed = [s for g in a["agenda"] if g["status"] == "aktiv" for s in [current_step(g)] if s and set(s["acts"]) & {"chop", "quarry"}]
+    if resources_needed and not any(o["type"] in ("chop", "quarry") for o in out):
+        out.append(opt("explore", "Nach Holz und Steinen suchen", 0.45, dur=1))
+
+
+def _c_candidate(w, a, act):
+    prop = w.proposals.get(act["target"])
+    if prop and prop["status"] == "offen" and a["id"] not in prop["candidates"]:
+        prop["candidates"].append(a["id"])
+        a["stats"]["candidacies"] = a["stats"].get("candidacies", 0) + 1
+        w.emit("politik", "kandidatur", f"{a['name']} kandidiert ({prop['title']}).", actors=[a["id"]], x=a["x"], y=a["y"],
+               data={"proposal": prop["id"]})
+
+
+def _c_persuade(w, a, act):
+    from .social3 import persuade
+    b = w.agents.get(act["target"])
+    if b and b["alive"] and dist(a["x"], a["y"], b["x"], b["y"]) <= 4:
+        persuade(w, a, b, act["data"]["proposal"])
+
+
+def _c_spread_rumor(w, a, act):
+    from .social3 import spread_rumor
+    b, about = w.agents.get(act["target"]), w.agents.get(act["data"]["about"])
+    if b and about and b["alive"] and dist(a["x"], a["y"], b["x"], b["y"]) <= 4:
+        spread_rumor(w, a, b, about)
+
+
+def _c_apologize(w, a, act):
+    from .social3 import apologize
+    b = w.agents.get(act["target"])
+    if b and b["alive"] and dist(a["x"], a["y"], b["x"], b["y"]) <= 4:
+        apologize(w, a, b)
+
+
+def _c_confront(w, a, act):
+    b = w.agents.get(act["target"])
+    if b and b["alive"] and dist(a["x"], a["y"], b["x"], b["y"]) <= 4:
+        S.confront(w, a, b, None)
+        t = a["emo_targets"].get(b["id"], {})
+        if "aerger" in t:
+            t["aerger"] = round(t["aerger"] * 0.7, 3)  # venting
+
+
+def _c_explore(w, a, act):
+    home = _home(w, a)
+    cx, cy = (home["x"], home["y"]) if home else (a["x"], a["y"])
+    best = None
+    for _ in range(30):
+        r = w.rng.randint(10, 18)
+        ang = w.rng.random() * 6.283
+        import math as _m
+        x, y = int(cx + r * _m.cos(ang)), int(cy + r * _m.sin(ang))
+        if w.in_bounds(x, y) and w.passable(x, y) and w.terrain(x, y) not in ("mountain",):
+            crowd = len(w.agents_near(x, y, 5))
+            score = -crowd + w.rng.random()
+            if best is None or score > best[0]:
+                best = (score, x, y)
+    if best:
+        path = find_path(w, (a["x"], a["y"]), (best[1], best[2]))
+        if path:
+            a["path"] = path
+            a["action"] = {"type": "travel", "label": "Erkundet die Gegend", "target": None, "data": {}, "dur": 1, "remaining": 1,
+                           "dest": [best[1], best[2]], "phase": "travel", "started": w.tick, "decision": None}
+            a["stats"]["explorations"] = a["stats"].get("explorations", 0) + 1
+
+
+def _c_appeal(w, a, act):
+    from .justice import file_appeal
+    c = w.cases.get(act["target"])
+    if c:
+        file_appeal(w, a, c)
+
+
+def _c_alliance(w, a, act):
+    from .social3 import alliance_of, found_alliance
+    members = [w.agents[m] for m in act["data"]["members"] if m in w.agents and w.agents[m]["alive"] and not alliance_of(w, m)]
+    agree = [m for m in members if w.rel(m["id"], a["id"])["trust"] > 0.55 and w.rng.random() < 0.4 + 0.4 * m["morals"]["loyalitaet"]]
+    if len(agree) >= 2 and not alliance_of(w, a["id"]):
+        purpose = "gegenseitige Unterstützung und gemeinsame Abstimmungen"
+        found_alliance(w, a, agree, purpose)
+    else:
+        w.emit("politik", "buendnis_abgelehnt", f"{a['name']} findet nicht genug Unterstützung für ein Bündnis.", actors=[a["id"]],
+               x=a["x"], y=a["y"])
+
+
+def _c_visit(w, a, act):
+    b = w.agents.get(act["target"])
+    if b and b["alive"] and dist(a["x"], a["y"], b["x"], b["y"]) <= 2:
+        S.converse(w, a, b)
+        b["needs"]["stress"] = clamp(b["needs"]["stress"] - 0.08)
+        w.emit("sozial", "besuch", f"{a['name']} besucht {b['name']} im Gefängnis.", actors=[a["id"], b["id"]], x=a["x"], y=a["y"])
+
+
+def _c_unterrichten(w, a, act):
+    b = w.buildings.get(act["target"])
+    if b:
+        b["teacher_day"] = w.day
+        a["skills"]["teaching"] = round(min(1.0, a["skills"]["teaching"] + 0.01), 4)
+
+
+def _c_patrol(w, a, act):
+    home = _home(w, a)
+    cx, cy = (home["x"], home["y"]) if home else (a["x"], a["y"])
+    x, y = cx + w.rng.randint(-5, 5), cy + w.rng.randint(-5, 5)
+    if w.in_bounds(x, y) and w.passable(x, y):
+        path = find_path(w, (a["x"], a["y"]), (x, y))
+        if path:
+            a["path"] = path
+            a["action"] = {"type": "travel", "label": "Auf Streife", "target": None, "data": {}, "dur": 1, "remaining": 1,
+                           "dest": [x, y], "phase": "travel", "started": w.tick, "decision": None}
+
+
+def _c_duty(w, a, act):
+    b = w.buildings.get(act["target"])
+    if not b:
+        return
+    for pat in w.agents_near(b["x"], b["y"], 1):
+        if pat.get("illness") and pat["id"] != a["id"] and pat["illness"].get("treated_until", -1) < w.tick:
+            _c_heal(w, a, {"target": pat["id"]})
+
+
+def _c_shopkeep(w, a, act):
+    a["stats"]["shop_hours"] = a["stats"].get("shop_hours", 0) + 1
+    for cust in w.agents_near(a["x"], a["y"], 1):
+        if cust["id"] != a["id"] and not cust.get("asleep") and w.age(cust) >= R.ADULT_AGE:
+            deal = propose_trade(w, cust, a)
+            if deal:
+                execute_trade(w, cust, a, deal)
+                break
+
+
+def _c_shop(w, a, act):
+    keeper = w.agents.get(act["target"])
+    if keeper and keeper["alive"] and dist(a["x"], a["y"], keeper["x"], keeper["y"]) <= 1:
+        deal = propose_trade(w, a, keeper)
+        if deal:
+            execute_trade(w, a, keeper, deal)
+
+
+def _c_pave(w, a, act):
+    if w.map["road"][a["y"], a["x"]] or w.qty(("agent", a["id"]), "stone") < 1:
+        return
+    site = start_site(w, "strasse", a["x"], a["y"], owner=a["id"], by=a["id"])
+    deliver(w, a, site)
+    work_on(w, a, site, R.BUILDINGS["strasse"]["labor"], 1.0)
+
+
+COMPLETE.update({"candidate": _c_candidate, "persuade": _c_persuade, "spread_rumor": _c_spread_rumor, "apologize": _c_apologize,
+                 "confront": _c_confront, "explore": _c_explore, "appeal": _c_appeal, "alliance": _c_alliance, "visit": _c_visit,
+                 "unterrichten": _c_unterrichten, "patrol": _c_patrol, "duty": _c_duty, "shopkeep": _c_shopkeep, "shop": _c_shop,
+                 "pave": _c_pave})
+SIGNIFICANT |= {"spread_rumor", "confront", "appeal", "alliance", "candidate", "persuade"}
+CATEGORY.update({"candidate": "politik", "persuade": "politik", "spread_rumor": "gemeinschaft", "apologize": "gemeinschaft",
+                 "confront": "gemeinschaft", "explore": "bauen", "appeal": "politik", "alliance": "politik", "visit": "familie",
+                 "unterrichten": "wissen", "patrol": "politik", "duty": "gemeinschaft", "shopkeep": "handel", "shop": "handel",
+                 "pave": "bauen"})

@@ -49,7 +49,8 @@ def school_available(w: World, a: dict) -> bool:
     inst = institution_of(w, region, "schule")
     if not inst or not inst["members"]:
         return False
-    return any(b["type"] == "schule" and b["region"] == region and b["condition"] > 0.25 for b in w.buildings.values())
+    return any(b["type"] == "schule" and b["region"] == region and b["condition"] > 0.25 and b.get("teacher_day", -9) >= w.day - 1
+               for b in w.buildings.values())
 
 
 # ------------------------------------------------------------------ conversations & information
@@ -108,6 +109,11 @@ def converse(w: World, a: dict, b: dict) -> int:
     for x, y in ((a, b), (b, a)):
         w.remember(x, "gespraech", f"Gespräch mit {y['name']}: {topic_txt}", 3 + 2 * (len(topics) > 0), event=eid,
                    subjects=[y["id"]])
+    from . import social3
+    social3.maybe_ask_for_help(w, a, b)
+    social3.maybe_ask_for_help(w, b, a)
+    social3.relay_rumors(w, a, b)
+    social3.relay_rumors(w, b, a)
     if w.mind is not None and w.mind.available() and w.mind.q.qsize() < 3:
         w.mind.request_dialog(w, a, b, topic_txt, eid)
     return eid
@@ -231,6 +237,35 @@ def proposal_ideas(w: World, a: dict) -> list[dict]:
         form = "versammlung" if v["freedom"] + v["fairness"] > 1.0 and "versammlung" in forms else forms[0]
         add(f"wechsel:{form}", "regierungswechsel", {"type": "regierung", "params": {"form": form, "leader": a["id"]}},
             f"Neue Ordnung: {R.GOVERNMENT_FORMS[form]}", 0.6, "Die jetzige Regierung hat kaum Rückhalt.")
+    if gov:
+        own = active_law(w, region, "eigentumsschutz")
+        thefts = tags.get("diebstahl", 0) + tags.get("betrug", 0)
+        if own and thefts >= 2 and own["effect"]["params"].get("sanktion") in ("rueckgabe", "doppelte_rueckgabe", "geldstrafe") \
+                and (a.get("morals") or {}).get("autoritaet", 0.5) + v["security"] > 1.15:
+            new = "haft" if any(b["type"] == "gefaengnis" and b["region"] == region for b in w.buildings.values()) or "steinbau" in a["techs"] \
+                else "geldstrafe"
+            if new != own["effect"]["params"].get("sanktion"):
+                add(f"aend:{own['id']}:{new}", "aenderung", {"type": "eigentumsschutz", "params": {"law": own["id"], "new": {"sanktion": new}}},
+                    f"Strengere Strafen bei Diebstahl ({new})", 0.5, "Diebstähle hören nicht auf.")
+        haft_law = any(l["status"] == "aktiv" and l["region"] == region and l["effect"]["params"].get("sanktion") == "haft" for l in w.laws.values())
+        if haft_law and "steinbau" in a["techs"] and not any(x["type"] == "gefaengnis" and x["region"] == region for x in list(w.buildings.values()) + list(w.sites.values())):
+            add("proj:gefaengnis", "projekt", {"type": "projekt", "params": {"btype": "gefaengnis"}}, "Ein Gefängnis bauen", 0.45,
+                "Haftstrafen brauchen einen Ort.")
+        if institution_of(w, region, "wache") and not any(x["type"] == "wachhaus" and x["region"] == region for x in list(w.buildings.values()) + list(w.sites.values())):
+            add("proj:wachhaus", "projekt", {"type": "projekt", "params": {"btype": "wachhaus"}}, "Ein Wachhaus bauen", 0.3,
+                "Die Wache braucht einen festen Ort.")
+        convicted_known = sum(1 for f in a["facts"].values() if f["k"] == "verdict" and "schuldig" in f["x"])
+        if convicted_known >= 2 and not active_law(w, region, "wiedereingliederung") and \
+                ((a.get("morals") or {}).get("fuersorge", 0.5) > 0.6 or a.get("convictions")):
+            add("law:wiedereingliederung", "gesetz", {"type": "wiedereingliederung", "params": {}}, "Hilfe beim Neuanfang nach der Haft",
+                0.35, "Wer seine Strafe verbüßt hat, braucht eine zweite Chance.")
+        if (tags.get("fehlurteil", 0) or (a.get("convictions") and a.get("emo", {}).get("aerger", 0) > 0.4)) and \
+                not institution_of(w, region, "berufungsgericht"):
+            add("inst:berufungsgericht", "institution", {"type": "institution", "params": {"itype": "berufungsgericht"}},
+                "Ein Berufungsgericht einrichten", 0.45, "Auch Gerichte können irren.")
+        if tags.get("fehlurteil", 0) and not active_law(w, region, "beweisregel"):
+            add("law:beweisregel", "gesetz", {"type": "beweisregel", "params": {"schwelle": 2.0}}, "Verurteilung nur mit zwei Beweisen",
+                0.4, "Ein Unschuldiger wurde verurteilt.")
     for law in w.laws.values():
         if law["status"] == "aktiv" and law["region"] == region and knows_law(w, a, law):
             u = law_utility(w, a, law["effect"])
@@ -254,6 +289,8 @@ def law_utility(w: World, a: dict, effect: dict) -> float:
         u = 0.55 * v["security"] + 0.3 * v["fairness"] + 0.3 * (tags.get("diebstahl", 0) > 0) - (0.6 if stole else 0) - 0.3
         if prm.get("sanktion") == "verbannung":
             u -= 0.35 * p["agreeableness"]
+        if prm.get("sanktion") == "haft":
+            u += 0.2 * v["security"] - 0.3 * p["agreeableness"] - (0.5 if a.get("convictions") else 0)
         return u
     if t == "gewaltverbot":
         return 0.6 * v["security"] + 0.3 * p["agreeableness"] - 0.15
@@ -272,6 +309,10 @@ def law_utility(w: World, a: dict, effect: dict) -> float:
         return 0.4 * (len(a["children"]) > 0) + 0.3 * v["community"] - 0.2 * v["freedom"]
     if t == "gesundheitsversorgung":
         return 0.5 * v["community"] + 0.3 * (tags.get("krankheit", 0) > 0) - 0.3 * rich * v["wealth"]
+    if t == "beweisregel":
+        return 0.5 * v["fairness"] - 0.4 * v["security"] + 0.4 * (tags.get("fehlurteil", 0) > 0) + (0.2 if float(prm.get("schwelle", 1)) > 1 else -0.1)
+    if t == "wiedereingliederung":
+        return 0.4 * v["community"] + 0.3 * v["fairness"] - 0.3 * v["security"] + 0.5 * (a.get("convictions", 0) > 0)
     return 0.0
 
 
@@ -302,9 +343,14 @@ def vote_utility(w: World, a: dict, prop: dict) -> float:
         if form == "oberhaupt_erblich":
             u += 0.6 * (w.rel(a["id"], prop["proposer"])["trust"] - 0.5)
         u += 0.15  # having any common order is valued
+    elif kind == "aenderung":
+        law = w.laws.get(eff["params"]["law"])
+        u = law_utility(w, a, {"type": eff["type"], "params": eff["params"]["new"]}) - \
+            (law_utility(w, a, law["effect"]) if law else 0) + 0.1
     elif kind == "institution":
         it = eff["params"]["itype"]
         u = {"gericht": 0.5 * v["fairness"] + 0.3 * v["security"] - 0.2, "wache": 0.6 * v["security"] - 0.3 * v["freedom"] - 0.05,
+             "berufungsgericht": 0.6 * v["fairness"] + 0.3 * (recent_tags(w, a, 60).get("fehlurteil", 0) > 0) - 0.3,
              "schule": 0.4 * v["community"] + 0.4 * (len(a["children"]) > 0) + 0.2 * p["curiosity"] - 0.2,
              "heilwesen": 0.5 * v["community"] + 0.3 * (recent_tags(w, a).get("krankheit", 0) > 0) - 0.15}[it]
     elif kind == "waehrung":
@@ -315,7 +361,25 @@ def vote_utility(w: World, a: dict, prop: dict) -> float:
         u = 0.4 * v["community"] + 0.3 * v["tradition"] + 0.2 * p["extraversion"] - 0.35
     else:
         u = 0.0
-    u += 0.35 * (w.rel(a["id"], prop["proposer"])["trust"] - 0.5) if prop["proposer"] != a["id"] else 0.5
+    m = a.get("morals") or {}
+    if m:
+        if kind in ("gesetz", "institution", "regierung"):
+            u += 0.25 * (m["autoritaet"] - 0.5) - 0.2 * (m["freiheit"] - 0.5)
+        if kind == "gesetz" and eff["type"] in ("grundversorgung", "gesundheitsversorgung", "wiedereingliederung"):
+            u += 0.3 * (m["fuersorge"] - 0.5)
+        if kind == "gesetz" and eff["type"] == "beweisregel":
+            u += 0.4 * (m["fairness"] - 0.5) - 0.2 * (m["autoritaet"] - 0.5)
+        if kind == "aenderung":
+            u += 0.3 * (m["autoritaet"] - m["fuersorge"])
+    if prop["proposer"] != a["id"]:
+        u += 0.35 * (w.rel(a["id"], prop["proposer"])["trust"] - 0.5)
+        t = (a.get("emo_targets") or {}).get(prop["proposer"], {})
+        u += 0.4 * t.get("dankbarkeit", 0) - 0.5 * t.get("aerger", 0)
+    else:
+        u += 0.5
+    u += (a.get("leanings") or {}).get(prop["id"], 0.0)
+    from .social3 import alliance_vote_bias
+    u += alliance_vote_bias(w, a, prop)
     u += w.rng.gauss(0, 0.12)
     return u
 
@@ -376,6 +440,11 @@ def cast_vote(w: World, a: dict, prop: dict) -> str:
                 continue
             r = w.rel(a["id"], cid)
             s = 0.4 * r["trust"] + 0.35 * r["respect"] + 0.25 * r["affection"] + (0.3 if cid == a["id"] else 0) + w.rng.gauss(0, 0.08)
+            t = (a.get("emo_targets") or {}).get(cid, {})
+            s += 0.3 * t.get("dankbarkeit", 0) - 0.4 * t.get("aerger", 0) - 0.3 * (a.get("opinions") or {}).get(cid, {}).get("verdacht", 0)
+            from .social3 import alliance_of
+            if any(cid in al["members"] for al in alliance_of(w, a["id"])):
+                s += 0.25 * a["morals"]["loyalitaet"]
             if s > bs:
                 best, bs = cid, s
         choice = best or "enthaltung"
@@ -425,6 +494,9 @@ def close_proposals(w: World) -> None:
                 w.learn(ag, f"res:{prop['id']}", "event", f"„{prop['title']}“ wurde {prop['status']}.", "beobachtet", 1.0, ref=eid)
                 ag.setdefault("vote_history", []).append(1 if (votes[vid] == "ja") == ok else 0)
                 ag["vote_history"] = ag["vote_history"][-10:]
+        from .cognition import notify
+        if prop["proposer"] in w.agents:
+            notify(w, w.agents[prop["proposer"]], "vorschlag_ergebnis", adopted=ok)
         if ok:
             apply_proposal(w, prop, eid)
 
@@ -469,6 +541,14 @@ def apply_proposal(w: World, prop: dict, cause: int) -> None:
                      data={"law": lid}, cause=cause, witnesses=False)
         law["event"] = eid
         _announce(w, region, f"law:{lid}", f"Gesetz: {law['title']}", eid, voters=prop["votes"])
+    elif prop["kind"] == "aenderung":
+        law = w.laws.get(eff["params"]["law"])
+        if law and law["status"] == "aktiv":
+            old = dict(law["effect"].get("params", {}))
+            law["effect"] = {"type": law["effect"]["type"], "params": eff["params"]["new"]}
+            law.setdefault("history", []).append([w.tick, f"geändert: {old} → {eff['params']['new']}"])
+            w.emit("politik", "gesetz_geaendert", f"Gesetz „{law['title']}“ geändert: {old} → {eff['params']['new']}.",
+                   data={"law": law["id"]}, cause=cause, witnesses=False)
     elif prop["kind"] == "aufhebung":
         law = w.laws.get(eff["params"]["law"])
         if law and law["status"] == "aktiv":
@@ -560,6 +640,8 @@ def _close_election(w: World, prop: dict, votes: dict) -> None:
             w.agents[c]["bio"].append([w.tick, f"In {inst['name']} gewählt."])
             w.remember(w.agents[c], "biografie", f"Ich wurde in {inst['name']} gewählt.", 8, event=eid, tags=["amt"])
             w.agents[c]["skills"]["leadership"] = round(min(1.0, w.agents[c]["skills"]["leadership"] + 0.05), 3)
+            from .cognition import notify
+            notify(w, w.agents[c], "gewaehlt")
     _announce(w, prop["region"], f"res:{prop['id']}", f"Gewählt: {', '.join(w.agents[c]['name'] for c in winners)}", eid)
 
 
@@ -640,6 +722,10 @@ def steal(w: World, thief: dict, victim: dict | None, building: dict | None, ite
     w.remember(thief, "tat", f"Ich habe {n} {R.ITEM_LABEL.get(item, item)} von {owner_name} genommen.", 7, event=eid,
                subjects=[owner_id] if owner_id else [], tags=["diebstahl_selbst"])
     thief["stressors"] = min(1.0, thief.get("stressors", 0) + 0.15 * thief["personality"]["agreeableness"])
+    thief.setdefault("secrets", []).append({"t": w.tick, "x": f"Ich habe {owner_name} {R.ITEM_LABEL.get(item, item)} weggenommen."})
+    thief["secrets"] = thief["secrets"][-10:]
+    from .cognition import notify
+    notify(w, thief, "eigene_tat", action="steal", caught=False)
     # witnesses who are awake nearby actually saw it
     for wt in w.agents_near(x, y, 3):
         if wt["id"] == thief["id"] or wt.get("asleep") or w.age(wt) < 6:
@@ -681,6 +767,8 @@ def discover_offense(w: World, victim: dict, otype: str, offender: dict | None, 
                + (f" – {offender['name']} war es." if offender else " – ich weiß nicht, wer es war."), 7, event=event,
                tags=["diebstahl" if otype == "diebstahl" else "betrug"])
     victim["stressors"] = min(1.0, victim.get("stressors", 0) + 0.12)
+    from .cognition import notify
+    notify(w, victim, "bestohlen" if otype == "diebstahl" else "betrogen", other=offender["id"] if offender else None)
     suspect, evidence = offender, [victim["id"]] if (offender and observed) else []
     if offender is None:
         # no knowledge of the culprit: a distrustful person may blame someone they distrust (possibly innocent)
@@ -708,6 +796,7 @@ def open_case(w: World, ctype: str, *, accuser: dict, accused: dict, event: int 
     case = {"id": kid, "type": ctype, "accuser": accuser["id"], "accused": accused["id"], "event": event,
             "claimed_event": claimed_event or event, "evidence": list(dict.fromkeys(evidence)), "status": "behauptung",
             "opened": w.tick, "region": region, "summary": "", "verdict": None}
+    case["true_offender"] = _offender_of(w, case["claimed_event"]) if case["claimed_event"] else case.get("true_offender")
     w.cases[kid] = case
     case["claim_event"] = w.emit("justiz", "anschuldigung", f"{accuser['name']} beschuldigt {accused['name']} ({ctype}).",
                                  actors=[accuser["id"], accused["id"]], x=accuser["x"], y=accuser["y"],
@@ -760,6 +849,12 @@ def violence(w: World, attacker: dict, target: dict, cause: int | None) -> int:
 
 
 def daily_justice(w: World) -> None:
+    from . import justice
+    justice.process_cases(w)
+    justice.daily_prisons(w)
+
+
+def _daily_justice_v2(w: World) -> None:  # World 2.0 procedure, kept for reference/tests of the old behaviour
     for case in w.cases.values():
         if case["status"] not in ("behauptung", "ermittlung"):
             continue
@@ -915,6 +1010,9 @@ def on_death(w: World, a: dict, eid: int) -> None:
             grief = r["affection"] * (1 if r["familiarity"] > 0.3 else 0.5)
             other["stressors"] = min(1.0, other.get("stressors", 0) + 0.4 * grief)
             w.remember(other, "verlust", f"{a['name']} ist gestorben.", 5 + 4 * grief, event=eid, subjects=[a["id"]], tags=["trauer"])
+            if grief > 0.4:
+                from .cognition import notify
+                notify(w, other, "trauerfall", closeness=grief)
             w.learn(other, f"ev:{eid}", "event", f"{a['name']} ist gestorben.", "erzählt", 1.0, ref=eid)
     inherit(w, a, eid)
 

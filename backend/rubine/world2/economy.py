@@ -167,8 +167,10 @@ def execute_trade(w: World, a: dict, b: dict, deal: dict, cause: int | None = No
             f"{deal['q_get']} {_label(deal['get'])}" + (f" (Abgabe {tax})" if tax else "") + ".")
     eid = w.emit("wirtschaft", "tausch", text, actors=[a["id"], b["id"]], x=a["x"], y=a["y"],
                  data={**deal, "tax": tax, "region": region}, cause=cause)
+    from .cognition import notify
     for x, other in ((a, b), (b, a)):
         w.learn(x, f"ev:{eid}", "event", text, "beobachtet", 1.0, ref=eid)
+        notify(w, x, "tausch_ok", other=other["id"])
     if cheat:
         w.totals["fraud"] += 1
         fe = w.emit("justiz", "betrug", f"{b['name']} hat {a['name']} beim Tausch 1 {_label(deal['get'])} zu wenig gegeben.",
@@ -213,6 +215,8 @@ def give(w: World, a: dict, b: dict, item: str, n: int, *, reason: str = "hilfe"
                  x=a["x"], y=a["y"], data={"item": item, "n": n, "reason": reason})
     w.remember(b, "sozial", f"{a['name']} hat mir mit {n} {_label(item)} geholfen.", 6, event=eid, subjects=[a["id"]],
                tags=["hilfe"])
+    from .cognition import notify
+    notify(w, b, "geholfen", other=a["id"])
     w.remember(a, "sozial", f"Ich habe {b['name']} mit {n} {_label(item)} geholfen.", 4, event=eid, subjects=[b["id"]])
     a["stats"]["helped"] = a["stats"].get("helped", 0) + 1
     w.daily["help"] += 1

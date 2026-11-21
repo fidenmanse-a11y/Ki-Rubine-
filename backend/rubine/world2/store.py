@@ -83,6 +83,8 @@ class WorldStore:
         if not row:
             return None
         w = from_snapshot(json.loads(zlib.decompress(row[0])))
+        from .upgrade import upgrade
+        upgrade(w)
         # recent events for live views
         for e in reversed(self.events(limit=200)):
             w.recent_events.append(e)

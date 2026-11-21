@@ -91,6 +91,9 @@ def deliver(w: World, a: dict, site: dict) -> int:
         if give > 0:
             w.transfer(("agent", a["id"]), ("site", site["id"]), it, give)
             moved += give
+            site.setdefault("donors", {})[a["id"]] = site.get("donors", {}).get(a["id"], 0) + give
+            if site.get("owner_kind") == "inst":
+                a["stats"]["public_builds"] = a["stats"].get("public_builds", 0) + 1
     return moved
 
 
@@ -131,10 +134,24 @@ def complete(w: World, site: dict) -> dict:
                  actors=site["workers"][:6], x=b["x"], y=b["y"], data={"building": bid, "type": b["type"]},
                  cause=site.get("cause"))
     w.totals[f"built:{b['type']}"] += 1
+    if b["owner_kind"] == "inst":
+        for wid in site["workers"]:
+            if wid in w.agents:
+                w.agents[wid]["stats"]["public_builds"] = w.agents[wid]["stats"].get("public_builds", 0) + 2
     if b["owner_kind"] == "agent" and b["owner"] in w.agents:
         o = w.agents[b["owner"]]
         o["bio"].append([w.tick, f"{label} gebaut."])
-        if b["type"] in R.SHELTER_TYPES and (not o.get("home") or _shelter_rank(w, b["type"]) > _shelter_rank(w, _home_type(w, o))):
+        if b["type"] in R.SHELTER_TYPES and site.get("relocate"):
+            old_home = o.get("home")
+            o["home"] = bid
+            for pid in [o.get("partner")] + o["children"]:
+                p2 = w.agents.get(pid or "")
+                if p2 and p2["alive"] and p2.get("home") == old_home and (pid == o.get("partner") or w.age(p2) < 18):
+                    p2["home"] = bid
+            o["bio"].append([w.tick, f"Neues Zuhause in {w.region_name(b['region'])} – ausgewandert."])
+            w.emit("bau", "umzug", f"{o['name']} ist nach {w.region_name(b['region'])} gezogen.", actors=[o["id"]], x=b["x"], y=b["y"],
+                   data={"building": bid})
+        elif b["type"] in R.SHELTER_TYPES and (not o.get("home") or _shelter_rank(w, b["type"]) > _shelter_rank(w, _home_type(w, o))):
             old = o.get("home")
             o["home"] = bid
             for pid in [o.get("partner")] + o["children"]:
@@ -176,6 +193,8 @@ def release_building(w: World, b: dict) -> None:
             a["home"] = None
             if a["alive"]:
                 a["stressors"] = min(1.0, a.get("stressors", 0) + 0.3)
+                from .cognition import notify
+                notify(w, a, "zuhause_verloren")
                 w.remember(a, "verlust", f"Mein Zuhause ({R.BUILDINGS[b['type']]['label']}) ist verloren.", 8,
                            tags=["haus", "verlust"])
     for inst in w.institutions.values():

@@ -120,4 +120,7 @@ def move_along(w: World, a: dict, points: float = 2.0) -> bool:
         budget -= c
         a["x"], a["y"] = nx, ny
         a["path"].pop(0)
+        tr = w.map.get("traffic")
+        if tr is not None:
+            tr[ny, nx] += 1
     return not a["path"]

@@ -80,6 +80,8 @@ def daily_environment(w: World) -> None:
         m["terrain"][back] = T["forest"]
         m["clearing_age"][back] = 0
     w.config["map_version"] = w.config.get("map_version", 0) + 1  # resource levels changed
+    if "traffic" in m:
+        m["traffic"][:] = (m["traffic"] * 0.97).astype(m["traffic"].dtype)  # paths fade unless used
     # floods
     m["flooded"][:] = 0
     if w.river_level > 1.0:
@@ -109,6 +111,8 @@ def daily_environment(w: World) -> None:
                 if near[a["y"], a["x"]] or any(abs(w.buildings[b]["x"] - a["x"]) < 8 for b in damaged if b in w.buildings):
                     w.learn(a, f"flood:{w.day}", "event", "Der Fluss hat Felder überflutet.", "beobachtet", 1.0)
                     w.remember(a, "beobachtung", "Hochwasser hat die Gegend am Fluss überflutet.", 6, tags=["hochwasser"])
+                    from .cognition import notify
+                    notify(w, a, "hochwasser")
     # building decay & storm damage
     storms = {int(k) for k, v in w.weather.items() if v["type"] == "sturm"}
     for b in list(w.buildings.values()):

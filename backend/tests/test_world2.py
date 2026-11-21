@@ -183,6 +183,9 @@ def test_theft_creates_traceable_events_and_verdict(w):
     assert case["status"] == "behauptung"                        # an accusation is not a fact
     w.tick += R.TICKS_PER_DAY + 1
     S.daily_justice(w)
+    assert case["status"] == "anklage"                             # World 3.0: charge first, verdict at the next sitting
+    w.tick += R.TICKS_PER_DAY
+    S.daily_justice(w)
     assert case["status"] == "schuldig" and witness["id"] in case["evidence"] and case["matches_truth"] is True
     verdict = next(e for e in w.event_buffer if e["kind"] == "urteil")
     assert verdict["cause"] == case["claim_event"]
@@ -200,7 +203,11 @@ def test_false_accusation_without_evidence_is_acquitted(w):
     case = S.open_case(w, "diebstahl", accuser=b, accused=innocent, event=None, evidence=[], claimed_event=eid)
     w.tick += R.TICKS_PER_DAY + 1
     S.daily_justice(w)
-    assert case["status"] == "freigesprochen" and case["matches_truth"] is True
+    assert case["status"] == "behauptung"                          # World 3.0: no charge without evidence
+    for _ in range(3):
+        w.tick += R.TICKS_PER_DAY
+        S.daily_justice(w)
+    assert case["status"] == "eingestellt" and case["matches_truth"] is True
 
 
 # ------------------------------------------------------------------ residents

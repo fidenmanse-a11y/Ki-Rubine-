@@ -80,6 +80,8 @@ def make_agent(w: World, rng: random.Random, *, name: str, family: str, origin: 
         "expecting": None,
     }
     w.agents[aid] = a
+    from .cognition import init_agent
+    init_agent(w, a)
     return a
 
 
@@ -100,8 +102,9 @@ def create_world(world_id: str, name: str, seed: int, population: int = 25) -> W
     w.map["flooded"] = np.zeros((w.h, w.w), dtype=np.int8)
     w.map["road"] = np.zeros((w.h, w.w), dtype=np.int8)
     w.map["bridge"] = np.zeros((w.h, w.w), dtype=np.int8)
+    w.map["traffic"] = np.zeros((w.h, w.w), dtype=np.int32)
     w.config = {"max_memories": 250, "max_population": 120, "llm": {"enabled": True, "mode": "async",
-                "calls_per_agent_day": 4, "timeout_ticks": 4}, "model": {"default": "base", "canary": None}}
+                "calls_per_agent_day": 4, "timeout_ticks": 4}, "model": {"default": "base", "canary": None}, "schema": 3, "follow": []}
     rng = w.rng
     sx, sy = m["start"]
     names = rng.sample(GIVEN, population)

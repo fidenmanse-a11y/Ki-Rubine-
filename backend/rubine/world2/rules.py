@@ -97,13 +97,18 @@ BUILDINGS: dict[str, dict] = {
     "bruecke":      {"label": "Brücke", "mat": {"wood": 10, "stone": 6}, "labor": 30, "tech": "brueckenbau", "decay": 0.002, "needs_terrain": ["river"]},
     "damm":         {"label": "Damm", "mat": {"stone": 12}, "labor": 30, "tech": "dammbau", "decay": 0.001},
     "wassermuehle": {"label": "Wassermühle", "mat": {"wood": 12, "stone": 8}, "labor": 40, "tech": "wassermuehle", "decay": 0.002},
+    "laden":        {"label": "Laden", "mat": {"wood": 8, "stone": 2}, "labor": 16, "tech": "holzbau", "storage": 60, "decay": 0.003},
+    "wachhaus":     {"label": "Wachhaus", "mat": {"wood": 8, "stone": 6}, "labor": 20, "tech": "holzbau", "decay": 0.002},
+    "gefaengnis":   {"label": "Gefängnis", "mat": {"wood": 10, "stone": 14}, "labor": 36, "tech": "steinbau", "storage": 30, "decay": 0.0015},
 }
 SHELTER_TYPES = {"huette", "haus", "steinhaus"}
 
 # ------------------------------------------------------------------ society
 LAW_EFFECTS: dict[str, dict] = {
-    "eigentumsschutz": {"label": "Eigentumsschutz", "params": {"sanktion": ["rueckgabe", "doppelte_rueckgabe", "verbannung"]}},
-    "gewaltverbot": {"label": "Gewaltverbot", "params": {"sanktion": ["busse", "arrest", "verbannung"]}},
+    "eigentumsschutz": {"label": "Eigentumsschutz", "params": {"sanktion": ["rueckgabe", "doppelte_rueckgabe", "geldstrafe", "bewaehrung", "haft", "verbannung"]}},
+    "gewaltverbot": {"label": "Gewaltverbot", "params": {"sanktion": ["busse", "arrest", "haft", "verbannung"]}},
+    "beweisregel": {"label": "Beweisregel", "params": {"schwelle": [1.0, 2.0]}},
+    "wiedereingliederung": {"label": "Wiedereingliederung nach der Haft", "params": {}},
     "steuer": {"label": "Abgabe auf Handel & Löhne", "params": {"satz": [0.05, 0.1, 0.2]}},
     "grundversorgung": {"label": "Grundversorgung aus Gemeinschaftskasse", "params": {}},
     "ressourcenschutz": {"label": "Ressourcenschutz", "params": {"ressource": ["wood", "fish", "forage"]}},
@@ -117,7 +122,8 @@ GOVERNMENT_FORMS = {
     "oberhaupt_wahl": "Gewähltes Oberhaupt",
     "oberhaupt_erblich": "Erbliches Oberhaupt (Monarchie)",
 }
-PUBLIC_INSTITUTIONS = {"gericht": "Gericht", "wache": "Wache", "schule": "Schulträger", "heilwesen": "Gesundheitsamt"}
+PUBLIC_INSTITUTIONS = {"gericht": "Gericht", "wache": "Wache", "schule": "Schulträger", "heilwesen": "Gesundheitsamt",
+                       "berufungsgericht": "Berufungsgericht"}
 PRIVATE_ORGS = {"unternehmen": "Unternehmen", "zeitung": "Zeitung", "hilfsverein": "Hilfsverein"}
 
 # Engine bootstrap rule used ONLY while a region has no government of its own:
