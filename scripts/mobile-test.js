@@ -21,7 +21,8 @@ const ok = (name, pass, detail = "") => { results.push({ name, pass: !!pass, det
     ok("Auth: Trainings-Endpunkt ohne Login gesperrt", r2.status() === 401, `HTTP ${r2.status()}`);
     await p.goto(`${BASE}/world/`);
     await p.waitForURL(/\/login\//, { timeout: 8000 }).catch(() => undefined);
-    ok("Auth: Weiterleitung zur Anmeldung", p.url().includes("/login/"), p.url());
+    const pwVisible = await p.waitForSelector("#pw", { timeout: 8000 }).then(() => true).catch(() => false);
+    ok("Auth: Weiterleitung zur Anmeldung zeigt das Passwortfeld", p.url().includes("/login/") && pwVisible, p.url());
     await ctx.close();
   }
 

@@ -74,14 +74,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  if (state === "checking") {
+  // The login page must always render, even if the auth check started on another page and redirected here.
+  if (state === "checking" && !isLogin) {
     return (
       <div className="grid min-h-dvh place-items-center">
         <RubineGem size={54} className="animate-pulse-soft" />
       </div>
     );
   }
-  if (state === "offline") {
+  if (state === "offline" && !isLogin) {
     return (
       <div className="grid min-h-dvh place-items-center px-8 text-center">
         <div className="animate-rise">
