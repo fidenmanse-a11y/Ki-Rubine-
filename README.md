@@ -36,6 +36,11 @@ Mit NVIDIA-Grafikkarte installiert das Setup automatisch die CUDA-Version von Py
 
 Linux/macOS/GPU-Server: `scripts/setup.sh` und `scripts/start.sh`.
 
+**Wichtig – kurzer Ordnerpfad:** Entpacke Rubine nach z. B. `C:\Rubine`, nicht in einen tief verschachtelten Download-Ordner.
+PyTorch enthält sehr lange Dateinamen; Windows erlaubt ohne „Long Paths“ nur 260 Zeichen pro Pfad (Fehler:
+`OSError: [Errno 2] No such file or directory … Windows Long Path support`). Alternativ lange Pfade erlauben
+(PowerShell als Administrator: `New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force`, danach neu anmelden).
+
 ## Auf dem iPhone öffnen
 
 1. PC und iPhone im **selben WLAN**.

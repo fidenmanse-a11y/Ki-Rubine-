@@ -28,6 +28,18 @@ Write-Host ""
 Write-Host "  Rubine AI - Einrichtung" -ForegroundColor Magenta
 Write-Host ""
 
+# PyTorch (CUDA) enthaelt Dateien mit ~140 Zeichen relativem Pfad. Ohne "Long Paths" erlaubt Windows nur 260 Zeichen.
+$longPaths = $false
+try { $longPaths = ((Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -ErrorAction Stop).LongPathsEnabled -eq 1) } catch { }
+if (-not $longPaths -and $Root.Length -gt 60) {
+    Write-Host "Der Ordnerpfad ist zu lang fuer Windows ($($Root.Length) Zeichen):" -ForegroundColor Red
+    Write-Host "  $Root"
+    Write-Host "Die Installation von PyTorch wuerde mit 'No such file or directory' scheitern."
+    Write-Host "Loesung: Rubine-Ordner nach C:\Rubine verschieben (dort einen ggf. vorhandenen Ordner backend\.venv loeschen)"
+    Write-Host "und Rubine-Setup.bat erneut starten. Alternativ in Windows lange Pfade erlauben (siehe README)."
+    exit 1
+}
+
 $py = Find-Python
 if (-not $py) {
     Write-Host "Python 3.11 - 3.13 wurde nicht gefunden." -ForegroundColor Red
