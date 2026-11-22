@@ -54,14 +54,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLogin) return;
     let alive = true;
+    // never spin forever: if the server does not answer within 10 s, show an explanation
+    const slow = setTimeout(() => alive && setState((st) => (st === "checking" ? "offline" : st)), 10000);
     api<{ authenticated: boolean }>("/api/auth/me")
       .then((r) => {
         if (!alive) return;
         if (!r.authenticated) router.replace("/login/");
         else setState("ok");
       })
-      .catch(() => alive && setState("offline"));
-    return () => { alive = false; };
+      .catch(() => alive && setState("offline"))
+      .finally(() => clearTimeout(slow));
+    return () => { alive = false; clearTimeout(slow); };
   }, [isLogin, router, path]);
 
   useEffect(() => {
@@ -85,7 +88,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <RubineGem size={56} className="mx-auto mb-5 opacity-80" />
           <h1 className="text-xl font-semibold">Rubine ist nicht erreichbar</h1>
           <p className="mt-2 text-[15px] text-fg-2">
-            Der Rubine-Server auf deinem PC antwortet nicht. Prüfe, ob er läuft und ob dein iPhone im selben WLAN ist.
+            Der Rubine-Server auf deinem PC antwortet nicht. Prüfe, ob das Fenster von Rubine-Start.bat noch offen ist.
+            Steht in dessen Titelleiste „Auswählen“ oder „Markieren“, klicke hinein und drücke Esc – dann läuft Rubine weiter.
+            Vom iPhone aus: gleiches WLAN wie der PC?
           </p>
           <button onClick={() => location.reload()} className="tap mt-6 rounded-2xl glass px-6 font-medium">Erneut versuchen</button>
         </div>
