@@ -1,7 +1,26 @@
 # Rubine auf dem iPhone
 
-Rubine läuft auf deinem PC. Das iPhone zeigt die Oberfläche als installierbare Web-App (PWA). Getestet wurde das Layout
-für das iPhone 14 (390 × 844 pt, Safe Areas, Dynamic-Island-/Notch-Abstand über `env(safe-area-inset-*)`).
+Rubine läuft auf deinem PC. Das iPhone zeigt die Oberfläche als installierbare Web-App (PWA) – **keine native App, kein App Store**.
+Unten: fünf Bereiche **Welt · Menschen · Gesellschaft · AI Lab · Chat**. Einstellungen erreichst du im AI Lab oben rechts.
+
+## Was wie getestet wurde – und was nicht
+
+| Geprüft | Wie |
+|---|---|
+| Layout iPhone SE, 14, 14 Pro Max (kein horizontales Scrollen), Safe Areas | Playwright/Chromium mit Geräte-Emulation (`scripts/mobile-test.js`, 31/31 bestanden) |
+| Touch: Tabs, Pinch-Zoom, Bewohner auf der Karte antippen, Bottom-Sheets, Tippziele ≥ 44 pt | dito, echte Touch-Ereignisse über das DevTools-Protokoll |
+| Kartenleistung | 44–60 fps in der Emulation (headless, 4 CPU-Kerne, Server lief parallel) |
+| Live-Updates, Pause/Geschwindigkeit, Verfolgen übersteht Neuladen, Offline-Seite, Login/Sperre ohne Login | dito |
+| Manifest, Icons, apple-touch-icon, Startbildschirme, `viewport-fit=cover`, Service Worker | dito + Dateiprüfung |
+
+**Nicht getestet: echtes Safari/WebKit auf einem echten iPhone.** In dieser Entwicklungsumgebung gibt es weder ein iPhone noch
+WebKit. Chromium-Emulation bildet Bildschirmgröße, Pixeldichte, Touch und User-Agent nach, aber nicht Safaris Eigenheiten
+(z. B. Verhalten der Adressleiste, PWA-Startbildschirme, Speicherlimits, tatsächliche Bildrate auf dem A-Chip).
+Bitte melde Auffälligkeiten auf dem echten Gerät. Den Test kannst du selbst laufen lassen:
+`node scripts/mobile-test.js http://localhost:8000 <dein-passwort> [ordner-für-screenshots]`.
+
+Ein beim Test gefundener echter Fehler wurde behoben: Nach einem Tippen öffnete sich ein Profil und schloss sich sofort wieder,
+weil der Browser nach dem Touch ein künstliches „click“ auf den Hintergrund des gerade geöffneten Blatts sendet („Ghost Click“).
 
 ## Im Heim-WLAN (HTTP)
 

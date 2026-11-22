@@ -1,4 +1,33 @@
-# Ehrlicher Projektstatus (Version 0.2.0 „World 2.0“, 21.11.2026)
+# Ehrlicher Projektstatus (Version 0.3.0 „World 3.0“, 22.11.2026)
+
+## Rubine World 3.0 – gemessen in dieser Umgebung (4 CPU-Kerne, keine GPU)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Automatische Tests | **137 bestanden**, 1 optionaler Echtmodell-Test übersprungen (davon 26 neu für World 3.0: Pläne, Neuplanung, Lernen, Emotionen, Versprechen, Gerüchte, Bündnisse, Fehden, Prozess, Haft, Unschuldsvermutung, Berufung, Spielstand-Upgrade, API, Bewohner-Test) |
+| Mobile Web-App | `scripts/mobile-test.js` **31/31 bestanden** in Chromium mit iPhone-Emulation (SE, 14, 14 Pro Max) |
+| **Nicht getestet** | **echtes Safari/WebKit auf einem echten iPhone** – in dieser Umgebung nicht verfügbar (siehe [IPHONE.md](IPHONE.md)) |
+| Mehrwelten-Experiment | 5 Seeds × (normal / identische Persönlichkeiten), je 60 Tage: 0 Fehler, Stoffbilanz exakt ([EXPERIMENTS.md](EXPERIMENTS.md)) |
+| Bewohner-Test | 0.5B 31,4 % (Zufall 31 %), 0.5B+LoRA 60,0 % (kein Transfer), 1.5B 68,6 % (mit Transfer) |
+| Training über die Pipeline | rv-0001: 22,9 % → 41,7 % auf dem unabhängigen Testset, aber Rückschritt in `sim_supply` → **Prüftor nicht bestanden, nicht aktiviert** |
+| Live mit Sprachmodell | Chat-Modell 0.5B + Bewohner-Modell 1.5B gleichzeitig: Dialoge und Bewohner-Gespräche vom 1.5B beobachtet |
+
+**Was World 3.0 nicht ist:** Die Bewohner haben kein Bewusstsein und kein Erleben. Emotionen, Überzeugungen und Pläne sind
+Zustandsgrößen bzw. Modellausgaben. Mehrschrittige Pläne erzeugt eine Planungs-Engine; das Sprachmodell wählt höchstens
+zwischen gültigen Optionen und begründet Ziele. Details: [WORLD3.md](WORLD3.md).
+
+**Ehrliche Einschränkungen von World 3.0**
+- Gerüchte, Fehden, Haftstrafen und Berufungen sind implementiert und getestet, traten in 60-Tage-Läufen aber nicht von selbst auf.
+- Diebstahl war nach Einführung der Moral-/Ziel-Logik praktisch unmöglich geworden (auch bei Hungersnot) – gefunden im
+  Knappheitsexperiment und korrigiert; seither selten, aber möglich.
+- Das 0.5B-Modell entscheidet als Bewohner auf Zufallsniveau. Das 1.5B ist besser, auf der CPU aber zu langsam, um bei 5× oder
+  schneller Handlungsentscheidungen rechtzeitig zu liefern – dann entscheiden die Regeln (gekennzeichnet).
+- LoRA-Training auf Bewohner-Entscheidungen lehrte die trainierten Situationstypen, übertrug aber nicht auf neue.
+- Langläufe über mehrere Jahre wurden für World 3.0 nur bis 84 Tage gemessen (World 2.0: 12 Jahre).
+
+---
+
+# Status von Rubine World 2.0 (Version 0.2.0, 21.11.2026)
 
 ## Rubine World 2.0 – gemessen in dieser Umgebung (4 CPU-Kerne, keine GPU)
 

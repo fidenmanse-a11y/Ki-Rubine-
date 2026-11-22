@@ -1,6 +1,6 @@
 # 💎 Rubine AI
 
-**Eine eigene, selbst trainierbare KI – mit Chat, einer Simulationswelt aus 25 KI-Agenten und einem AI Lab für echtes LoRA-Fine-Tuning. Läuft auf deinem PC, bedienbar vom iPhone.**
+**Eine eigene, selbst trainierbare KI – mit Chat, einer autonomen Simulationsgesellschaft aus 25 KI-Agenten und einem AI Lab für echtes LoRA-Fine-Tuning. Läuft auf deinem PC, bedienbar vom iPhone (PWA).**
 
 Rubine ist **keine** Oberfläche für ChatGPT oder Claude. Jede Antwort im Chat stammt von einem lokal laufenden Open-Weight-Modell
 (Basis: [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct), Apache-2.0), das über eigene LoRA-Adapter
@@ -10,9 +10,10 @@ Version für Version weitertrainiert wird.
 |---|---|
 | **Chat** | Mehrere Unterhaltungen, Umbenennen/Löschen, Bearbeiten, Neu generieren, Streaming, Markdown + Code mit Kopieren, Suche, Modellversion wählen |
 | **Rubine World 2.0** | Persistente KI-Gesellschaft: 25 simulierte Bewohner ohne vorgegebene Regierung, Gesetze, Geld oder Gebäude. Sie bauen, handeln, gründen Familien, Regierungen, Gerichte, Schulen und Währungen, erkranken, altern und sterben – alles über eine prüfbare World Engine. Interaktive Karte mit Tag/Nacht und Wetter, Bewohner-Inspektor, Live-Feed, Chronik, Steuerung ([Details](docs/WORLD2.md)) |
+| **World 3.0** | Bewohner mit eigenen Zielen, mehrschrittigen Plänen mit erwarteten Folgen, Neuplanung bei Unerwartetem, simulierten Emotionen, Überzeugungen (auch Irrtümern), Lektionen, Moral und Geheimnissen; Freundschaften, Versprechen, Überzeugen, Gerüchte, Bündnisse, Fehden; Justiz mit Ermittlung, Unschuldsvermutung, Falschaussagen, Haft, Entlassung, Fehlurteilen und Berufung; Bewohner-Test für Sprachmodelle ([Details](docs/WORLD3.md), [Experimente](docs/EXPERIMENTS.md)) |
 | **Klassische Welt (v0.1)** | Die ursprüngliche Smallville-Stadt bleibt optional erhalten (`RUBINE_SIM_ENABLED=true`, Seite `/world/classic`) |
 | **AI Lab** | Trainingsdaten erzeugen/importieren/prüfen, versionierte Datensätze, echtes LoRA-Training (Start/Pause/Stopp), Live-Loss, Evaluation, Modellvergleich, Aktivierung, Rollback, Ressourcen-Monitor |
-| **iPhone** | Installierbare PWA (OLED-Schwarz, Liquid Glass, Safe Areas/Dynamic Island), „Zum Home-Bildschirm“ |
+| **iPhone** | Installierbare PWA (OLED-Schwarz, Liquid Glass, Safe Areas/Dynamic Island), 5 Bereiche Welt · Menschen · Gesellschaft · AI Lab · Chat, Gespräche mit Bewohnern, „Zum Home-Bildschirm“ |
 
 ➡️ **Was tatsächlich läuft und was gemessen wurde: [docs/STATUS.md](docs/STATUS.md)**
 
@@ -58,6 +59,8 @@ Wie das Training gegen Selbstbestätigung abgesichert ist: **[docs/TRAINING.md](
 ## Dokumentation
 
 - [docs/STATUS.md](docs/STATUS.md) – ehrlicher Stand, Messergebnisse, Grenzen
+- [docs/WORLD3.md](docs/WORLD3.md) – World 3.0: Ziele, Pläne, Innenzustand, soziale Mechanik, Justiz, Bewohner-Test, App
+- [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) – Mehrwelten-Experimente, Ablation, Bewohner-Test, Training – mit echten Zahlen
 - [docs/WORLD2.md](docs/WORLD2.md) – Rubine World 2.0: Regeln der Welt, Agentenarchitektur, Persistenz, Training, Grenzen
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – Aufbau, Komponenten, Datenfluss
 - [docs/TRAINING.md](docs/TRAINING.md) – Trainingspipeline, Lehrer-Modelle, Datenformat für Claude-Importe

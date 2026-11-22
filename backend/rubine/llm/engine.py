@@ -18,6 +18,7 @@ from typing import Any, Iterator
 from ..config import Settings, get_settings
 
 log = logging.getLogger("rubine.engine")
+MODEL_LOAD_LOCK = threading.Lock()  # shared by every in-process model load (chat engine, resident model)
 
 SYSTEM_PROMPT = (
     "Du bist Rubine, eine eigenständige KI, die lokal auf dem Computer ihres Besitzers läuft. "
@@ -128,8 +129,9 @@ class ModelEngine:
             self.device = resolve_device(self.settings.device)
             log.info("Lade Basismodell %s auf %s ...", self.settings.base_model, self.device)
             t = time.time()
-            self.tok = load_tokenizer(self.settings)
-            self.base = load_base_model(self.settings, self.device)
+            with MODEL_LOAD_LOCK:  # transformers model loading is not thread-safe (meta-device init)
+                self.tok = load_tokenizer(self.settings)
+                self.base = load_base_model(self.settings, self.device)
             self.loaded_at = time.time()
             self.status = "ready"
             log.info("Basismodell geladen in %.1fs", time.time() - t)

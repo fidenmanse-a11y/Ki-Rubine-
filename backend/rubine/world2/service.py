@@ -102,6 +102,10 @@ class WorldService:
             self.mind = Mind(_make_generate(), model_for=_model_for)
             self.mind.start()
         w.mind = self.mind
+        m = w.config.get("model") or {}
+        for vid in [m.get("default") or ""] + [((m.get("canary") or {}).get("version")) or ""]:
+            if vid.startswith("hf:") and benchmarked_hf_model(vid[3:]):
+                _hf_agent.ensure(vid[3:])
 
     # ------------------------------------------------------------ main loop
     def _loop(self) -> None:
@@ -241,6 +245,9 @@ class WorldService:
         with self.lock:
             w = self.world
             agents = [a for a in canary_agents if a in w.agents][:8]
+            for vid in [default] + ([canary_version] if canary_version else []):
+                if vid.startswith("hf:"):
+                    _hf_agent.ensure(vid[3:])  # start loading in the background now
             w.config["model"] = {"default": default,
                                  "canary": {"version": canary_version, "agents": agents} if canary_version and agents else None}
             w.emit("system", "modellrichtlinie", f"Entwickler: Agenten-Modell {default}" +
@@ -318,11 +325,12 @@ class _HFAgentModel:
         threading.Thread(target=load, daemon=True, name="rubine-agent-model").start()
         return False
 
-    def generate(self, name: str, system: str, user: str) -> str | None:
+    def generate(self, name: str, system: str, user: str, max_tokens: int | None = None,
+                 history: list[dict] | None = None) -> str | None:
         if not self.ensure(name):
             return None  # still loading -> the rules decide meanwhile
         with self.lock:
-            return self.gen(system, user)
+            return self.gen(system, user, max_tokens, history)
 
 
 _hf_agent = _HFAgentModel()
@@ -354,7 +362,8 @@ def _make_generate():
                             max_new_tokens=max_tokens, temperature=temp, system=system, background=True, wait_timeout=1.0)
 
     def ready() -> bool:
-        return get_engine().status == "ready"
+        # the chat engine, or a separately loaded larger resident model, can answer
+        return get_engine().status == "ready" or _hf_agent.gen is not None
 
     generate.ready = ready  # type: ignore[attr-defined]
     return generate

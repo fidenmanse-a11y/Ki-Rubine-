@@ -327,8 +327,6 @@ async def agent_chat(aid: str, body: AgentChat, request: Request) -> StreamingRe
     from .service import _model_for
     s = svc()
     eng = get_engine()
-    if eng.status != "ready":
-        raise HTTPException(503, f"Sprachmodell nicht bereit ({eng.status})")
     with s.lock:
         w = s.world
         a = w.agents.get(aid)
@@ -336,6 +334,8 @@ async def agent_chat(aid: str, body: AgentChat, request: Request) -> StreamingRe
             raise HTTPException(404, "Bewohner nicht gefunden oder verstorben")
         system = _persona(w, a)
         version = _model_for(w, a)
+    if not version.startswith("hf:") and eng.status != "ready":
+        raise HTTPException(503, f"Sprachmodell nicht bereit ({eng.status})")
     with session_scope() as db:
         v = db.get(ModelVersion, version)
         adapter = v.adapter_path if v else None
@@ -347,6 +347,20 @@ async def agent_chat(aid: str, body: AgentChat, request: Request) -> StreamingRe
     stop = threading.Event()
 
     def worker() -> None:
+        if version.startswith("hf:"):
+            # the larger resident model answers itself (no streaming); never silently fall back to another model
+            from .service import _hf_agent
+            try:
+                out = _hf_agent.generate(version[3:], system, body.message, max_tokens=body.max_new_tokens, history=msgs[:-1])
+                if out is None:
+                    msg = _hf_agent.error or f"{version[3:]} wird noch geladen – bitte gleich erneut versuchen."
+                    loop.call_soon_threadsafe(queue.put_nowait, ("error", msg))
+                else:
+                    loop.call_soon_threadsafe(queue.put_nowait, ("token", out))
+                    loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+            except Exception as e:  # noqa: BLE001
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", f"{type(e).__name__}: {e}"))
+            return
         try:
             for chunk in eng.stream(msgs, version_id=version, adapter_path=adapter, max_new_tokens=body.max_new_tokens,
                                     temperature=0.7, system=system, stop_event=stop):
