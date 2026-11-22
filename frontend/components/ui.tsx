@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { IconClose } from "./icons";
 
 export function Spinner({ className = "" }: { className?: string }) {
@@ -61,6 +61,10 @@ export function Card({ children, className = "", title, action }: { children: Re
 }
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode }) {
+  // On touch devices the browser fires a synthetic "click" right after the tap that opened the sheet; it would land on
+  // the backdrop and close the sheet immediately ("ghost click"). Ignore backdrop clicks shortly after opening.
+  const openedAt = useRef(0);
+  useEffect(() => { if (open) openedAt.current = performance.now(); }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -71,7 +75,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-black/60 animate-fade" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 animate-fade" onClick={() => { if (performance.now() - openedAt.current > 400) onClose(); }} />
       <div className="glass-strong relative max-h-[88dvh] w-full max-w-xl overflow-hidden rounded-t-[28px] sm:rounded-[28px] animate-sheet">
         <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-white/20 sm:hidden" />
         <div className="flex items-center justify-between px-5 pb-2 pt-3">

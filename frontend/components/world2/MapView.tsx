@@ -271,6 +271,13 @@ export function MapView(props: {
     return () => cancelAnimationFrame(raf);
   }, [terrain, trafficLayer, size, map, regionCentre]);
 
+  // test hook: screen position (relative to the canvas) of a tile centre, used by scripts/mobile-test.js
+  useEffect(() => {
+    (window as unknown as { __rubineMap?: unknown }).__rubineMap = {
+      toScreen: (tx: number, ty: number) => { const v = view.current; return { x: v.ox + (tx + 0.5) * TILE * v.s, y: v.oy + (ty + 0.5) * TILE * v.s }; },
+    };
+  }, []);
+
   const toWorld = useCallback((px: number, py: number) => {
     const v = view.current;
     return { x: (px - v.ox) / (TILE * v.s), y: (py - v.oy) / (TILE * v.s) };

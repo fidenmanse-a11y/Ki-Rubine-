@@ -108,7 +108,9 @@ const ok = (name, pass, detail = "") => { results.push({ name, pass: !!pass, det
     await p.waitForSelector("canvas[aria-label]");
     await p.waitForTimeout(4000);
     const b2 = await p.locator("canvas[aria-label]").boundingBox();
-    await p.touchscreen.tap(b2.x + b2.width / 2, b2.y + b2.height / 2);
+    const cur = await p.evaluate(async (id) => (await (await fetch("/api/world2/state")).json()).agents.find((a) => a.id === id), lone.id);
+    const pos = await p.evaluate(([x, y]) => window.__rubineMap.toScreen(x, y), [cur.x, cur.y]);
+    await p.touchscreen.tap(b2.x + pos.x, b2.y + pos.y);
     const opened = await p.waitForSelector("[role=dialog]", { timeout: 5000 }).then(() => true).catch(() => false);
     const title = opened ? await p.locator("[role=dialog] h2").innerText() : "";
     ok("Karte: Bewohner antippen öffnet Profil", opened && title.startsWith(lone.name), `${lone.name} → ${title}`);
