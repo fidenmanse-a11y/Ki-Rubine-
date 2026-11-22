@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Pinned revision for reproducible training (None = latest).
     base_model_revision: str | None = "7ae557604adf67be50417f59c2c2f167def9a775"
     base_model_license: str = "Apache-2.0"
+    # Larger open-weight models that may be evaluated with the resident benchmark (pinned revisions; local cache or download).
+    agent_bench_models: dict[str, str] = {"Qwen/Qwen2.5-1.5B-Instruct": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"}
     load_model_on_startup: bool = True
     device: str = "auto"  # auto | cpu | cuda | mps
     max_new_tokens: int = 512

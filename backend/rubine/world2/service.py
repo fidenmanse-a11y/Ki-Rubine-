@@ -230,6 +230,11 @@ class WorldService:
         from ..llm.registry import CHAT_STATUSES
         with session_scope() as s:
             for vid in [default] + ([canary_version] if canary_version else []):
+                if vid.startswith("hf:"):
+                    # a larger open-weight base model for residents: allowed only if listed and benchmarked
+                    if not benchmarked_hf_model(vid[3:]):
+                        raise ValueError(f"{vid[3:]} ist nicht freigegeben oder hat noch keinen Bewohner-Test bestanden.")
+                    continue
                 v = s.get(ModelVersion, vid)
                 if v is None or v.status not in CHAT_STATUSES:
                     raise ValueError(f"Version {vid} ist nicht getestet/freigegeben und darf Agenten nicht steuern.")
@@ -266,6 +271,63 @@ def _model_for(w: World, a: dict) -> str:
     return m.get("default", "base")
 
 
+def benchmarked_hf_model(name: str) -> dict | None:
+    """Return the stored resident-benchmark result for an allowed larger model if it beats chance clearly."""
+    settings = get_settings()
+    if name not in settings.agent_bench_models:
+        return None
+    d = settings.eval_dir / "agent_bench"
+    best = None
+    for f in d.glob(f"{name.replace('/', '_')}-*.json") if d.exists() else []:
+        try:
+            r = json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if r.get("accuracy", 0) >= r.get("chance", 1) + 0.15 and (best is None or r["accuracy"] > best["accuracy"]):
+            best = r
+    return best
+
+
+class _HFAgentModel:
+    """Separately loaded larger base model for residents (CPU/GPU memory permitting). Loaded lazily, one at a time."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.name: str | None = None
+        self.gen = None
+        self.error: str | None = None
+        self.loading = False
+
+    def ensure(self, name: str) -> bool:
+        if self.name == name and self.gen is not None:
+            return True
+        if self.loading:
+            return False
+        self.loading = True
+
+        def load() -> None:
+            try:
+                from .benchmark import hf_generator
+                gen, _ = hf_generator(name, revision=get_settings().agent_bench_models.get(name), max_new_tokens=60)
+                self.gen, self.name, self.error = gen, name, None
+            except Exception as e:  # noqa: BLE001
+                self.error = f"{type(e).__name__}: {e}"
+                log.warning("Agentenmodell %s konnte nicht geladen werden: %s", name, e)
+            finally:
+                self.loading = False
+        threading.Thread(target=load, daemon=True, name="rubine-agent-model").start()
+        return False
+
+    def generate(self, name: str, system: str, user: str) -> str | None:
+        if not self.ensure(name):
+            return None  # still loading -> the rules decide meanwhile
+        with self.lock:
+            return self.gen(system, user)
+
+
+_hf_agent = _HFAgentModel()
+
+
 def _make_generate():
     """Language access for residents through the shared Rubine engine (chat keeps priority)."""
     from ..db import ModelVersion, session_scope
@@ -283,6 +345,8 @@ def _make_generate():
         return path
 
     def generate(version: str, system: str, user: str, max_tokens: int, temp: float) -> str | None:
+        if version.startswith("hf:"):
+            return _hf_agent.generate(version[3:], system, user)
         eng = get_engine()
         if eng.status != "ready":
             raise RuntimeError(f"Sprachmodell nicht bereit ({eng.status})")

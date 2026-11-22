@@ -25,7 +25,7 @@ log = logging.getLogger("rubine.jobs")
 
 ACTIVE = ("running", "pausing", "stopping")
 OPEN = ("queued",) + ACTIVE
-JOB_TYPES = {"synthetic", "build_dataset", "teacher", "train", "evaluate", "compare", "sim_export"}
+JOB_TYPES = {"synthetic", "build_dataset", "teacher", "train", "evaluate", "compare", "sim_export", "agent_bench"}
 
 
 class JobError(ValueError):

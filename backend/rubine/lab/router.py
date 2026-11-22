@@ -253,6 +253,39 @@ def evaluate(body: EvaluateRequest, s: Session = Depends(get_db)) -> dict:
     return _submit("evaluate", body.model_dump())
 
 
+class AgentBenchRequest(BaseModel):
+    version_id: str | None = None
+    hf_model: str | None = None
+    per_cat: int = Field(default=10, ge=2, le=40)
+
+
+@router.post("/agent-bench")
+def agent_bench(body: AgentBenchRequest, s: Session = Depends(get_db)) -> dict:
+    if body.hf_model and body.hf_model not in get_settings().agent_bench_models:
+        raise HTTPException(422, "Modell nicht freigegeben")
+    if not body.hf_model:
+        v = s.get(ModelVersion, body.version_id or registry.BASE_ID)
+        if v is None or (v.id != registry.BASE_ID and not v.adapter_path):
+            raise HTTPException(422, "Version hat keine Gewichte")
+    return _submit("agent_bench", body.model_dump())
+
+
+@router.get("/agent-bench")
+def agent_bench_results() -> dict:
+    import json as _json
+    d = get_settings().eval_dir / "agent_bench"
+    rows = []
+    for f in sorted(d.glob("*.json")) if d.exists() else []:
+        try:
+            r = _json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        rows.append({k: v for k, v in r.items() if k != "results"})
+    rows.sort(key=lambda r: -(r.get("created") or 0))
+    return {"results": rows, "models": list(get_settings().agent_bench_models),
+            "note": "Misst Entscheidungen in klaren Situationen (gleiches Format wie die Simulation), nicht Verständnis oder Bewusstsein."}
+
+
 @router.get("/evals")
 def evals(s: Session = Depends(get_db)) -> list[dict]:
     rows = s.scalars(select(EvalRun).order_by(EvalRun.created_at.desc()).limit(100))
@@ -270,6 +303,9 @@ class SimExportRequest(BaseModel):
     per_family: int = Field(default=60, ge=1, le=1000)
     include_dialogs: bool = False
     seed: int = 1
+    resident_decisions: bool = False  # World 3.0: situation-determined decision examples from separate training worlds
+    worlds: int = Field(default=6, ge=1, le=40)
+    per_cat: int = Field(default=10, ge=1, le=40)
 
 
 @router.post("/data/simulation")

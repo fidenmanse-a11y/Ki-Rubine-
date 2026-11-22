@@ -229,7 +229,23 @@ def _record_stats(w: World) -> None:
           "avg_techs": round(sum(len(a["techs"]) for a in living) / max(1, len(living)), 2),
           "money_supply": {c["id"]: c["minted"] for c in w.currencies.values()},
           "forest_tiles": int((w.map["wood"] > 0).sum()), "deforested_day": w.daily["deforested"],
-          "river_level": w.river_level, "max_generation": max((a.get("generation", 0) for a in living), default=0)}
+          "river_level": w.river_level, "max_generation": max((a.get("generation", 0) for a in living), default=0),
+          # World 3.0
+          "prisoners": sum(1 for a in living if a.get("prison")),
+          "friendships": sum(len(a.get("friends", [])) for a in living) // 2,
+          "alliances": sum(1 for al in w.alliances.values() if al["active"]),
+          "feuds": sum(1 for f in w.feuds.values() if f["active"]),
+          "promises_kept": sum(1 for p in w.promises.values() if p["status"] == "gehalten"),
+          "promises_broken": sum(1 for p in w.promises.values() if p["status"] == "gebrochen"),
+          "goals_reached": sum(1 for a in w.agents.values() for h in a.get("goal_history", []) if h["status"] == "erreicht"),
+          "goals_abandoned": sum(1 for a in w.agents.values() for h in a.get("goal_history", []) if h["status"] == "aufgegeben"),
+          "active_goals": sum(1 for a in living for g in a.get("agenda", []) if g["status"] == "aktiv"),
+          "wrongful_convictions": w.totals.get("wrongful_convictions", 0), "overturned_wrongful": w.totals.get("overturned_wrongful", 0),
+          "verdicts_total": w.totals.get("verdicts", 0), "imprisonments_total": w.totals.get("imprisonments", 0),
+          "lies_exposed": sum(1 for r in w.rumors.values() if r.get("exposed")), "rumors_total": len(w.rumors),
+          "avg_mood_anger": round(sum(a["emo"]["aerger"] for a in living if "emo" in a) / max(1, len(living)), 3),
+          "avg_mood_joy": round(sum(a["emo"]["freude"] for a in living if "emo" in a) / max(1, len(living)), 3),
+          "settlement_sizes": {t["name"]: t.get("pop", 0) for t in w.settlements.values() if t["active"]}}
     w.stats_buffer.append(st)
     w.config["stats_last"] = st
 

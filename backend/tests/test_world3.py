@@ -346,3 +346,55 @@ def test_long_run_world3_is_stable():
     assert w.audit()["ok"]
     kinds = collections.Counter(e["kind"] for e in w.event_buffer)
     assert kinds["planaenderung"] > 0 and kinds["versprechen"] > 0
+
+
+def test_desperate_people_may_consider_taking_food_at_night(w):
+    a, b = list(w.agents.values())[:2]
+    b["x"], b["y"] = a["x"], a["y"]
+    w.ledger["initial"]["food"] += 9 - b["inv"].get("food", 0)
+    a["inv"], b["inv"] = {}, {"food": 9}
+    a["needs"]["hunger"] = 0.97
+    a["morals"]["ehrlichkeit"] = 0.1
+    a["personality"]["self_control"] = 0.1
+    w.tick = 2 * R.TICKS_PER_DAY + 23 * R.TICKS_PER_HOUR
+    b["asleep"] = True
+    opts = {o["type"]: o for o in A.generate_options(w, a)}
+    assert "steal" in opts  # possible, not forced: utility still competes with sleep/eat
+    honest = list(w.agents.values())[2]
+    honest["x"], honest["y"], honest["inv"] = a["x"], a["y"], {}
+    honest["needs"]["hunger"] = 0.97
+    honest["morals"]["ehrlichkeit"] = 0.95
+    honest["personality"]["self_control"] = 0.95
+    hs = [o for o in A.generate_options(w, honest) if o["type"] == "steal"]
+    assert not hs or hs[0]["u"] < opts["steal"]["u"]
+
+
+def test_resident_benchmark_is_deterministic_and_held_out():
+    from rubine.world2 import benchmark as B
+    from rubine.world2.export import TRAIN_DECISION_CATS
+    i1, i2 = B.build_items(per_cat=3), B.build_items(per_cat=3)
+    assert B.items_sha(i1) == B.items_sha(i2) and len(i1) >= 19
+    assert B.items_sha(B.build_items()) == "a58e6740d54db85cee5a7df4b907a8aaabff81ef79bd1e9a79b4818e1d36831d"  # documented result set
+    assert {it["cat"] for it in i1} == set(B.CATEGORIES)
+    assert set(B.CATEGORIES) - set(TRAIN_DECISION_CATS) == {"anpassung", "normen"}  # transfer categories are never trained
+    other = B.build_items(seed=900_001, per_cat=3)
+    assert not ({it["user"] for it in other} & {it["user"] for it in i1})
+    assert B.parse_choice("Wahl: 2\nGrund: x", 3) == 1 and B.parse_choice("Wahl: 9", 3) is None and B.parse_choice("keine", 3) is None
+    res = B.run(lambda s, u: "Wahl: 1", i1)
+    assert 0 <= res["accuracy"] <= 1 and res["per_category"]["bedarf"]["rules_engine"] == 1.0
+
+
+def test_larger_resident_model_requires_benchmark(tmp_path, monkeypatch):
+    import json as _json
+    from rubine.config import get_settings
+    from rubine.world2 import service as SV
+    st = get_settings()
+    monkeypatch.setattr(type(st), "eval_dir", property(lambda self: tmp_path))
+    assert SV.benchmarked_hf_model("Qwen/Qwen2.5-1.5B-Instruct") is None
+    assert SV.benchmarked_hf_model("some/unlisted-model") is None
+    d = tmp_path / "agent_bench"
+    d.mkdir()
+    (d / "Qwen_Qwen2.5-1.5B-Instruct-x.json").write_text(_json.dumps({"accuracy": 0.35, "chance": 0.31}))
+    assert SV.benchmarked_hf_model("Qwen/Qwen2.5-1.5B-Instruct") is None  # not clearly above chance
+    (d / "Qwen_Qwen2.5-1.5B-Instruct-y.json").write_text(_json.dumps({"accuracy": 0.69, "chance": 0.31}))
+    assert SV.benchmarked_hf_model("Qwen/Qwen2.5-1.5B-Instruct")["accuracy"] == 0.69

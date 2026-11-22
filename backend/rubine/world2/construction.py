@@ -243,6 +243,7 @@ def detect_settlements(w: World) -> None:
         match["buildings"] = sorted(ids)
         match["x"], match["y"] = cx, cy
         residents = sum(1 for a in w.living() if a.get("home") in ids)
+        match["pop"] = residents
         match["peak_pop"] = max(match.get("peak_pop", 0), residents)
         seen.add(match["id"])
     for s in w.settlements.values():

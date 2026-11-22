@@ -3,6 +3,7 @@ export type Calendar = { year: number; season: number; season_name: string; day_
 export type W2Agent = {
   id: string; name: string; family: string; x: number; y: number; alive: boolean; age: number; activity: string;
   cat: string | null; asleep: boolean; ill: boolean; origin: string; child: boolean; thinking: boolean; health: number;
+  prisoner?: boolean;
 };
 
 export type W2Building = { id: string; type: string; label: string; x: number; y: number; condition: number; owner: string | null; name: string | null };
@@ -23,7 +24,7 @@ export type W2State = {
 
 export type W2Map = {
   w: number; h: number; terrain: string[]; terrain_legend: Record<string, string>; wood: string[]; region: string[];
-  regions: string[]; roads: number[][]; bridges: number[][]; flooded: number[][]; map_version: number;
+  regions: string[]; roads: number[][]; bridges: number[][]; flooded: number[][]; map_version: number; traffic?: string[] | null;
   buildings: W2Building[]; sites: W2Site[]; settlements: W2Settlement[];
 };
 

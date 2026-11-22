@@ -1,6 +1,6 @@
 /* Rubine service worker – caches the app shell for an offline view.
  * Never caches /api/ (chats and model output are always live). Requires HTTPS (or localhost). */
-const VERSION = "rubine-v1";
+const VERSION = "rubine-v3";
 const SHELL = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {

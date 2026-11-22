@@ -27,6 +27,7 @@ from .security.auth import (COOKIE_NAME, check_password, issue_token, login_limi
 from .security.logging_setup import setup_logging
 from .world.router import router as world_router
 from .world2.api import router as world2_router
+from .world2.api3 import router as world3_router
 
 log = logging.getLogger("rubine")
 
@@ -147,6 +148,7 @@ def create_app() -> FastAPI:
     app.include_router(models_router)
     app.include_router(world_router)
     app.include_router(world2_router)
+    app.include_router(world3_router)
     app.include_router(lab_router)
 
     # ---- static PWA (Next.js export) ----

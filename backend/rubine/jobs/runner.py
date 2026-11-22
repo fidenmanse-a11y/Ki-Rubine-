@@ -285,6 +285,13 @@ def run_sim_export(ctx: JobContext, p: dict) -> dict:
     from ..world2.service import load_registry, world_dir
     from ..world2.store import WorldStore
     from ..world2.export import export_to_pool
+    if p.get("resident_decisions"):
+        from ..world2.export import export_resident_decisions
+        ctx.status("Erzeuge Bewohner-Entscheidungen aus Trainingswelten …")
+        with session_scope() as s:
+            res = export_resident_decisions(s, worlds=int(p.get("worlds", 6)), per_cat=int(p.get("per_cat", 10)))
+            audit(s, "data.resident_decisions", job=ctx.job_id, **{k: v for k, v in res.items() if k != "categories"})
+        return res
     world_id = p.get("world_id") or load_registry().get("active")
     if not world_id:
         raise ValueError("Keine Simulationswelt vorhanden")
@@ -302,8 +309,45 @@ def run_sim_export(ctx: JobContext, p: dict) -> dict:
     return {"world_id": world_id, "tick": w.tick, **res}
 
 
+def run_agent_bench(ctx: JobContext, p: dict) -> dict:
+    """Resident decision benchmark on a held-out world (see rubine/world2/benchmark.py)."""
+    from ..world2 import benchmark as B
+    settings = get_settings()
+    items = B.build_items(per_cat=int(p.get("per_cat", 10)))
+    sha = B.items_sha(items)
+    if p.get("hf_model"):
+        name = p["hf_model"]
+        if name not in settings.agent_bench_models:
+            raise ValueError("Modell nicht freigegeben (agent_bench_models)")
+        label, model, rev, adapter = name, name, settings.agent_bench_models[name], None
+    else:
+        vid = p.get("version_id") or registry.BASE_ID
+        with session_scope() as s:
+            v = s.get(ModelVersion, vid)
+            if v is None or (v.id != registry.BASE_ID and not v.adapter_path):
+                raise ValueError("Version hat keine Gewichte")
+            adapter = v.adapter_path
+        label, model, rev = vid, settings.base_model, settings.base_model_revision
+    ctx.status(f"Lade {label} …")
+    gen, info = B.hf_generator(model, adapter, revision=rev)
+
+    def prog(done: int, total: int) -> bool:
+        ctx.progress(done / total, f"Bewohner-Test {label}: {done}/{total}")
+        return ctx.control() == "stop"
+
+    try:
+        res = B.run(gen, items, progress=prog)
+    except InterruptedError:
+        raise JobStopped()
+    res.update(info, label=label, items_sha256=sha, seed=B.BENCH_SEED, job_id=ctx.job_id, created=time.time())
+    out = settings.eval_dir / "agent_bench" / f"{label.replace('/', '_')}-{sha[:12]}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {k: v for k, v in res.items() if k != "results"}
+
+
 HANDLERS: dict[str, Callable[[JobContext, dict], dict]] = {
-    "sim_export": run_sim_export,
+    "sim_export": run_sim_export, "agent_bench": run_agent_bench,
     "synthetic": run_synthetic, "build_dataset": run_build_dataset, "teacher": run_teacher,
     "train": run_train, "evaluate": run_evaluate, "compare": run_compare,
 }

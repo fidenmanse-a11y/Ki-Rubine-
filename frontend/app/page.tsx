@@ -221,6 +221,7 @@ function Chat() {
             <span className={`h-2 w-2 shrink-0 rounded-full ${engine?.status === "ready" ? "bg-ok" : engine?.status === "loading" ? "bg-warn animate-pulse-soft" : "bg-bad"}`} />
             <span className="truncate">{versionName}</span>
           </button>
+          <a href="/talk/" className="tap grid place-items-center rounded-full px-2 text-[13px] font-medium text-fg-2" aria-label="Mit Bewohnern sprechen">Bewohner</a>
           <button aria-label="Neuer Chat" onClick={() => { router.push("/"); setInput(""); taRef.current?.focus(); }} className="tap grid place-items-center rounded-full text-fg">
             <IconPlus />
           </button>

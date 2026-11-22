@@ -39,7 +39,8 @@ def persona_block(w: World, a: dict) -> str:
     home = w.buildings.get(a.get("home") or "")
     inv = ", ".join(f"{n} {R.ITEM_LABEL.get(k, 'Münzen')}" for k, n in (a.get("inv") or {}).items()) or "nichts"
     n = a["needs"]
-    goals = "; ".join(g["text"] for g in a["goals"])
+    agenda = sorted((g for g in a.get("agenda", []) if g["status"] == "aktiv"), key=lambda g: -g["prio"])
+    goals = "; ".join(g["text"] for g in agenda[:3]) or "; ".join(g["text"] for g in a["goals"])
     return (f"Du bist {a['name']} {a['family']}, {int(w.age(a))} Jahre alt, aus der Gruppe der {a['origin']}. "
             f"Persönlichkeit: {trait_txt}. Dir wichtig: {vals}. Ziele: {goals}. "
             f"Lage: Hunger {describe_level(n['hunger'])}, Durst {describe_level(n['thirst'])}, Energie {describe_level(n['energy'])}, "

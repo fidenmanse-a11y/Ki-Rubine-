@@ -108,6 +108,9 @@ def generate_options(w: World, a: dict) -> list[dict]:
     if _banned_here(w, a, a["x"], a["y"]):
         out.append(opt("leave", "Die Region verlassen (verbannt)", 4.0, dur=1))
     if night and not a["personality"]["extraversion"] > 0.85:
+        if a["needs"]["hunger"] > 0.6 and w.age(a) >= 14:
+            # desperate people may consider taking food while others sleep (never forced; morals, fear and guilt weigh in)
+            _deviance_options(w, a, out, fd, gov)
         return out
     if a.get("illness") and a["illness"]["severity"] > 0.25:
         healer = _find_healer(w, a)
@@ -461,10 +464,10 @@ def _knowledge_options(w: World, a: dict, out: list, home: dict | None) -> None:
 
 def _deviance_options(w: World, a: dict, out: list, fd: float, gov: dict | None) -> None:
     p = a["personality"]
-    desperate = clamp((a["needs"]["hunger"] - 0.5) * 2) * clamp(1 - fd)
+    desperate = clamp((a["needs"]["hunger"] - 0.5) * 2) * clamp(1 - fd / 1.5)
     greed = a["values"]["wealth"] * (1 - p["agreeableness"]) * 0.35
     morals = a.get("morals") or {"ehrlichkeit": honesty(a), "autoritaet": 0.5}
-    drive = (1.8 * desperate + greed) * (1 - 0.6 * p["self_control"]) * (1 - 0.5 * (0.5 * honesty(a) + 0.5 * morals["ehrlichkeit"]))
+    drive = (3.0 * desperate + greed) * (1 - 0.6 * p["self_control"]) * (1 - 0.5 * (0.5 * honesty(a) + 0.5 * morals["ehrlichkeit"]))
     if drive < 0.15:
         return
     region = w.region_of(a["x"], a["y"])

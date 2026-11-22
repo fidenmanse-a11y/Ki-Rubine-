@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DevelopmentTab, GoalsTab, InnerTab, KnowledgeTab, type Mind } from "@/components/world2/MindTabs";
 import { Badge, Card, Notice, Progress, Sheet, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { itemLabel, NEED_LABEL, PERS_LABEL, VALUE_LABEL } from "@/lib/world2";
@@ -21,10 +23,10 @@ type Detail = {
   memories: { t: number; k: string; x: string; imp: number; s: number }[]; recent: { k: string; x: string }[];
   knowledge: { k: string; x: string; src: string; conf: number }[]; bio: [number, string][];
   decisions: { t: number; by: string; model: string | null; chosen: string; why: string; options: { label: string; u: number }[] }[];
-  model: { assigned: string; last_used: string | null }; stats: Record<string, number>;
+  model: { assigned: string; last_used: string | null }; stats: Record<string, number>; mind?: Mind;
 };
 
-const TABS = ["Überblick", "Beziehungen", "Gedächtnis", "Entscheidungen", "Biografie"] as const;
+const TABS = ["Überblick", "Ziele & Pläne", "Innenleben", "Wissen & Urteile", "Beziehungen", "Gedächtnis", "Entscheidungen", "Entwicklung", "Biografie"] as const;
 const SKILL_LABEL: Record<string, string> = {
   farming: "Ackerbau", gathering: "Sammeln", woodcutting: "Holzfällen", masonry: "Steinbruch", building: "Bauen", crafting: "Handwerk",
   healing: "Heilkunde", trading: "Handel", teaching: "Lehren", research: "Forschen", leadership: "Führung", art: "Kunst",
@@ -34,9 +36,22 @@ const FOCUS_LABEL: Record<string, string> = {
   familie: "Familie & Freunde", erholung: "Erholung", gemeinschaft: "Anderen helfen",
 };
 
-export function AgentInspector({ id, onClose, onSelect }: { id: string | null; onClose: () => void; onSelect: (id: string) => void }) {
+export function AgentInspector({ id, onClose, onSelect, onTrack }: {
+  id: string | null; onClose: () => void; onSelect: (id: string) => void; onTrack?: (id: string) => void;
+}) {
   const [d, setD] = useState<Detail | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Überblick");
+  const [followed, setFollowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    setFollowed(null);
+    if (!id) return;
+    api<{ follow: { id: string }[] }>("/api/world2/follow").then((r) => setFollowed(r.follow.some((f) => f.id === id))).catch(() => undefined);
+  }, [id]);
+  async function toggleFollow() {
+    if (!id) return;
+    const r = await api<{ follow: string[] }>("/api/world2/follow", { method: "POST", json: { agent_id: id, follow: !followed } });
+    setFollowed(r.follow.includes(id));
+  }
   useEffect(() => {
     setD(null);
     if (!id) return;
@@ -57,6 +72,15 @@ export function AgentInspector({ id, onClose, onSelect }: { id: string | null; o
             <span className="text-[13px] text-fg-3">{d.age.toFixed(0)} J. · {d.origin} · Gen. {d.generation}</span>
           </div>
           <p className="text-[12px] leading-snug text-fg-3">{d.notice}</p>
+          {d.alive && (
+            <div className="flex gap-2">
+              <button onClick={toggleFollow} className={`tap flex-1 rounded-2xl text-[14px] font-medium ${followed ? "bg-[#fbbf24]/20 text-[#fbbf24]" : "glass"}`}>
+                {followed ? "★ Verfolgt" : "☆ Verfolgen"}
+              </button>
+              {onTrack && <button onClick={() => { onTrack(d.id); onClose(); }} className="tap glass flex-1 rounded-2xl text-[14px] font-medium">Auf Karte folgen</button>}
+              <Link href={`/talk/?id=${d.id}`} className="tap glass grid flex-1 place-items-center rounded-2xl text-[14px] font-medium">Gespräch</Link>
+            </div>
+          )}
           {!d.alive && <Notice tone="info">Verstorben {d.death_calendar} ({d.death_cause}). Die Person bleibt Teil der Geschichte.</Notice>}
           <div className="scroll-smooth-ios -mx-1 flex gap-1 overflow-x-auto px-1">
             {TABS.map((t) => (
@@ -64,6 +88,10 @@ export function AgentInspector({ id, onClose, onSelect }: { id: string | null; o
             ))}
           </div>
           {tab === "Überblick" && <Overview d={d} />}
+          {tab === "Ziele & Pläne" && (d.mind?.available ? <GoalsTab m={d.mind} /> : <NoMind />)}
+          {tab === "Innenleben" && (d.mind?.available ? <InnerTab m={d.mind} /> : <NoMind />)}
+          {tab === "Wissen & Urteile" && (d.mind?.available ? <KnowledgeTab m={d.mind} /> : <NoMind />)}
+          {tab === "Entwicklung" && (d.mind?.available ? <DevelopmentTab m={d.mind} /> : <NoMind />)}
           {tab === "Beziehungen" && <Relations d={d} onSelect={onSelect} />}
           {tab === "Gedächtnis" && <Memory d={d} />}
           {tab === "Entscheidungen" && <Decisions d={d} />}
@@ -85,6 +113,10 @@ export function AgentInspector({ id, onClose, onSelect }: { id: string | null; o
       )}
     </Sheet>
   );
+}
+
+function NoMind() {
+  return <p className="text-[14px] text-fg-3">Für diesen Bewohner liegen keine World-3.0-Daten vor.</p>;
 }
 
 function Bar({ label, v, invert }: { label: string; v: number; invert?: boolean }) {
@@ -128,8 +160,15 @@ function Overview({ d }: { d: Detail }) {
         {d.owned.length > 0 && <div className="mt-1 text-[13px] text-fg-3">Eigentum: {d.owned.map((o) => o.label).join(", ")}</div>}
         {d.currency && <div className="mt-1 text-[13px] text-fg-3">Währung: {d.currency.name} (1 Münze ≈ {d.currency.value_in_food} Nahrung)</div>}
       </Card>
-      <Card title="Ziele & Pläne">
-        <ul className="list-disc space-y-1 pl-5 text-[14px]">{d.goals.map((g) => <li key={g.type}>{g.text}</li>)}</ul>
+      <Card title="Ziele">
+        {d.mind?.available && d.mind.agenda.filter((g) => g.status === "aktiv").length > 0 ? (
+          <ul className="space-y-1 text-[14px]">
+            {d.mind.agenda.filter((g) => g.status === "aktiv").slice(0, 3).map((g) => (
+              <li key={g.id}>{g.text} <span className="text-[12px] text-fg-3">– nächster Schritt: {g.plan.steps[g.plan.current]?.text ?? "—"}</span></li>
+            ))}
+          </ul>
+        ) : <ul className="list-disc space-y-1 pl-5 text-[14px]">{d.goals.map((g) => <li key={g.type}>{g.text}</li>)}</ul>}
+        {d.mind?.available && <div className="mt-1 text-[13px] text-fg-3">Stimmung: {d.mind.mood}</div>}
         {d.plans.length > 0 && <div className="mt-2 text-[13px] text-fg-2">Langfristige Überlegung (modellgeneriert): „{d.plans[0]}“</div>}
       </Card>
       <Card title="Persönlichkeit & Werte">
@@ -224,9 +263,22 @@ function Decisions({ d }: { d: Detail }) {
   );
 }
 
-export function BuildingSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
+type Interior = { rooms: { name: string; people: { id: string; name: string; activity: string; prisoner: boolean }[] }[];
+  open_cases?: { id: string; type: string; accused: string; phase: string }[]; taught_today?: boolean; note: string };
+
+export function BuildingSheet({ id, onClose, onSelect }: { id: string | null; onClose: () => void; onSelect?: (id: string) => void }) {
   const [b, setB] = useState<Record<string, unknown> | null>(null);
-  useEffect(() => { setB(null); if (id) api<Record<string, unknown>>(`/api/world2/buildings/${id}`).then(setB).catch(() => undefined); }, [id]);
+  const [inside, setInside] = useState<Interior | null>(null);
+  useEffect(() => {
+    setB(null); setInside(null);
+    if (!id) return;
+    let alive = true;
+    api<Record<string, unknown>>(`/api/world2/buildings/${id}`).then((x) => alive && setB(x)).catch(() => undefined);
+    const loadIn = () => api<Interior>(`/api/world2/buildings/${id}/interior`).then((x) => alive && setInside(x)).catch(() => undefined);
+    loadIn();
+    const t = setInterval(loadIn, 3000);
+    return () => { alive = false; clearInterval(t); };
+  }, [id]);
   return (
     <Sheet open={!!id} onClose={onClose} title={(b?.label as string) ?? "Gebäude"}>
       {!b ? <div className="grid h-32 place-items-center"><Spinner /></div> : b.site ? (
@@ -247,6 +299,28 @@ export function BuildingSheet({ id, onClose }: { id: string | null; onClose: () 
           {(b.residents as string[]).length > 0 && <div>Bewohnt von: {(b.residents as string[]).join(", ")}</div>}
           {Object.keys(b.storage as object).length > 0 && <div>Lager: {Object.entries(b.storage as Record<string, number>).map(([k, n]) => `${n} ${itemLabel(k)}`).join(", ")}</div>}
           {(b.documents as string[]).length > 0 && <div>Schriften: {(b.documents as string[]).join(", ")}</div>}
+          {inside && (
+            <div className="pt-2">
+              <div className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-fg-3">Innen – jetzt</div>
+              <div className="grid grid-cols-2 gap-2">
+                {inside.rooms.map((r) => (
+                  <div key={r.name} className="card min-h-[72px] p-3">
+                    <div className="text-[12px] font-medium text-fg-3">{r.name}</div>
+                    {r.people.length === 0 ? <div className="mt-1 text-[12px] text-fg-3">leer</div> : r.people.map((p) => (
+                      <button key={p.id} onClick={() => onSelect?.(p.id)} className="mt-1 block text-left text-[13px]">
+                        <span className="font-medium">{p.name}</span>{p.prisoner ? " (Haft)" : ""} <span className="text-fg-3">– {p.activity}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {inside.open_cases && inside.open_cases.length > 0 && (
+                <div className="mt-2 text-[13px] text-fg-2">Laufende Verfahren: {inside.open_cases.map((c) => `${c.type} gegen ${c.accused} (${c.phase})`).join(" · ")}</div>
+              )}
+              {inside.taught_today != null && <div className="mt-2 text-[13px] text-fg-2">{inside.taught_today ? "Heute fand Unterricht statt." : "Heute noch kein Unterricht."}</div>}
+              <p className="mt-2 text-[11px] text-fg-3">{inside.note}</p>
+            </div>
+          )}
         </div>
       )}
     </Sheet>

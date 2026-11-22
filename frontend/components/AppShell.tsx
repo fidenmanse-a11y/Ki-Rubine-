@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { IconChat, IconLab, IconSettings, IconWorld, RubineGem } from "./icons";
+import { IconChat, IconLab, IconPeople, IconSociety, IconWorld, RubineGem } from "./icons";
 
 const TABS = [
-  { href: "/", label: "Chat", Icon: IconChat },
-  { href: "/world/", label: "World", Icon: IconWorld },
-  { href: "/lab/", label: "AI Lab", Icon: IconLab },
-  { href: "/settings/", label: "Mehr", Icon: IconSettings },
+  { href: "/world/", label: "Welt", Icon: IconWorld, match: ["/world"] },
+  { href: "/people/", label: "Menschen", Icon: IconPeople, match: ["/people"] },
+  { href: "/society/", label: "Gesellschaft", Icon: IconSociety, match: ["/society"] },
+  { href: "/lab/", label: "AI Lab", Icon: IconLab, match: ["/lab", "/settings"] },
+  { href: "/", label: "Chat", Icon: IconChat, match: ["/talk"] },
 ];
 
 function TabBar() {
@@ -22,20 +23,20 @@ function TabBar() {
       aria-label="Hauptnavigation"
     >
       <div className="glass-strong flex w-full max-w-md items-center justify-between rounded-[26px] p-1.5">
-        {TABS.map(({ href, label, Icon }) => {
-          const active = href === "/" ? path === "/" : path.startsWith(href.replace(/\/$/, ""));
+        {TABS.map(({ href, label, Icon, match }) => {
+          const active = (href === "/" && path === "/") || match.some((m) => path.startsWith(m));
           return (
             <Link
               key={href}
               href={href}
-              className={`tap relative flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[20px] py-1.5 text-[11px] font-medium transition-colors ${
+              className={`tap relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-[20px] py-1.5 text-[10.5px] font-medium transition-colors ${
                 active ? "text-white" : "text-fg-3"
               }`}
               aria-current={active ? "page" : undefined}
             >
               {active && <span className="absolute inset-0 rounded-[20px] bg-white/10 animate-fade" />}
               <Icon size={23} className="relative" />
-              <span className="relative">{label}</span>
+              <span className="relative max-w-full truncate">{label}</span>
             </Link>
           );
         })}

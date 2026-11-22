@@ -14,7 +14,11 @@ const BUILDING_COLOR: Record<string, string> = {
   huette: "#bfae8f", haus: "#d9c9a8", steinhaus: "#e5e1d8", bauernhof: "#a3c67a", werkstatt: "#c79a6b", lagerhaus: "#d6a76b",
   markt: "#fbbf24", versammlungshalle: "#a78bfa", schule: "#93c5fd", heilhaus: "#f87171", krankenhaus: "#fb7185",
   gericht: "#c4b5fd", bibliothek: "#818cf8", brunnen: "#60a5fa", strasse: "#9ca3af", bruecke: "#b08968", damm: "#a8a29e",
-  wassermuehle: "#38bdf8",
+  wassermuehle: "#38bdf8", laden: "#f59e0b", wachhaus: "#60a5fa", gefaengnis: "#71717a",
+};
+const CAT_DOT: Record<string, string> = {
+  vorraete: "#86efac", bauen: "#fbbf24", handel: "#f59e0b", politik: "#c4b5fd", wissen: "#93c5fd", gemeinschaft: "#f9a8d4",
+  erholung: "#64748b", versorgung: "#5eead4", familie: "#fda4af",
 };
 
 type View = { s: number; ox: number; oy: number };
@@ -23,6 +27,7 @@ type Pick = { kind: "agent"; id: string } | { kind: "building"; id: string };
 export function MapView(props: {
   map: W2Map; state: W2State; buildings: W2Building[]; sites: W2Site[]; settlements: W2Settlement[];
   onPick: (p: Pick) => void; selected?: string | null; height: number;
+  traffic?: boolean; followed?: string[]; trackId?: string | null; rounded?: boolean;
 }) {
   const { map, state } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,6 +85,22 @@ export function MapView(props: {
     return c;
   }, [map]);
 
+  // traffic layer: how often residents walked over a tile (real counter kept by the simulation)
+  const trafficLayer = useMemo(() => {
+    if (typeof document === "undefined" || !map.traffic) return null;
+    const c = document.createElement("canvas");
+    c.width = map.w * TILE; c.height = map.h * TILE;
+    const g = c.getContext("2d")!;
+    const col = ["", "rgba(251,191,36,0.25)", "rgba(251,146,60,0.45)", "rgba(248,113,113,0.65)"];
+    map.traffic.forEach((row, y) => {
+      for (let x = 0; x < map.w; x++) {
+        const v = Number(row[x]);
+        if (v > 0) { g.fillStyle = col[v]; g.fillRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2); }
+      }
+    });
+    return c;
+  }, [map]);
+
   // region centres for weather particles and labels
   const regionCentre = useMemo(() => {
     const acc: Record<string, { x: number; y: number; n: number }> = {};
@@ -134,9 +155,19 @@ export function MapView(props: {
     cv.height = Math.round(size.h * dpr);
     const g = cv.getContext("2d")!;
     let raf = 0;
+    let frames = 0, fpsT = performance.now();
     const particles = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), v: 0.4 + Math.random() * 0.6 }));
     const draw = () => {
-      const { state: st, buildings, sites, settlements, selected } = dataRef.current;
+      const { state: st, buildings, sites, settlements, selected, traffic, followed, trackId } = dataRef.current;
+      // follow mode: keep the tracked resident centred (smoothly)
+      if (trackId) {
+        const ta = st.agents.find((a) => a.id === trackId);
+        if (ta) {
+          const cv0 = view.current, T0 = TILE * cv0.s;
+          const tx = size.w / 2 - (ta.x + 0.5) * T0, ty = size.h / 2 - (ta.y + 0.5) * T0;
+          view.current = clampView({ s: cv0.s, ox: cv0.ox + (tx - cv0.ox) * 0.08, oy: cv0.oy + (ty - cv0.oy) * 0.08 }, size, map);
+        }
+      }
       const v = view.current;
       const T = TILE * v.s;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -144,6 +175,7 @@ export function MapView(props: {
       g.fillRect(0, 0, size.w, size.h);
       g.imageSmoothingEnabled = v.s < 1.5;
       g.drawImage(terrain, v.ox, v.oy, map.w * T, map.h * T);
+      if (traffic && trafficLayer) g.drawImage(trafficLayer, v.ox, v.oy, map.w * T, map.h * T);
       // sites
       for (const s of sites) {
         const x = v.ox + s.x * T, y = v.oy + s.y * T;
@@ -167,10 +199,17 @@ export function MapView(props: {
       const ar = agentsRef.current;
       const k = Math.min(1, (performance.now() - ar.t) / ar.dur);
       const rad = Math.max(3, T * 0.36);
+      // residents sharing a tile are spread in a small circle so each stays tappable and visible
+      const groups = new Map<string, string[]>();
+      for (const a of st.agents) { const key = `${a.x},${a.y}`; const g0 = groups.get(key); if (g0) g0.push(a.id); else groups.set(key, [a.id]); }
       for (const a of st.agents) {
         const p0 = ar.prev.get(a.id), p1 = ar.cur.get(a.id) ?? { x: a.x, y: a.y };
         const ax = p0 ? p0.x + (p1.x - p0.x) * k : p1.x, ay = p0 ? p0.y + (p1.y - p0.y) * k : p1.y;
-        const x = v.ox + (ax + 0.5) * T, y = v.oy + (ay + 0.5) * T;
+        const grp = groups.get(`${a.x},${a.y}`)!;
+        const gi = grp.indexOf(a.id), gn = grp.length;
+        const spread = gn > 1 ? Math.min(0.42, 0.18 + 0.04 * gn) : 0;
+        const ang = (gi / gn) * Math.PI * 2;
+        const x = v.ox + (ax + 0.5 + Math.cos(ang) * spread) * T, y = v.oy + (ay + 0.5 + Math.sin(ang) * spread) * T;
         if (x < -20 || y < -20 || x > size.w + 20 || y > size.h + 20) continue;
         const r = a.child ? rad * 0.7 : rad;
         if (a.thinking) {
@@ -180,12 +219,22 @@ export function MapView(props: {
         g.globalAlpha = a.asleep ? 0.5 : 1;
         g.fillStyle = ORIGIN_COLOR[a.origin] ?? "#ddd";
         g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-        g.strokeStyle = a.id === selected ? "#fff" : "rgba(0,0,0,0.7)"; g.lineWidth = a.id === selected ? 2.5 : 1; g.stroke();
+        g.strokeStyle = a.id === selected ? "#fff" : followed?.includes(a.id) ? "#fbbf24" : "rgba(0,0,0,0.7)";
+        g.lineWidth = a.id === selected || followed?.includes(a.id) ? 2.5 : 1; g.stroke();
+        if (a.prisoner) { // bars: resident is in prison (real state)
+          g.strokeStyle = "rgba(20,20,20,0.9)"; g.lineWidth = 1.2;
+          for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(x + i * r * 0.5, y - r); g.lineTo(x + i * r * 0.5, y + r); g.stroke(); }
+        }
+        if (a.cat && !a.asleep && v.s > 1.1) { // activity category of the current real action
+          g.fillStyle = CAT_DOT[a.cat] ?? "#e5e5e5";
+          g.beginPath(); g.arc(x - r * 0.85, y + r * 0.85, Math.max(1.8, r * 0.3), 0, Math.PI * 2); g.fill();
+        }
         if (a.ill) { g.fillStyle = "#ff453a"; g.beginPath(); g.arc(x + r * 0.8, y - r * 0.8, Math.max(2, r * 0.35), 0, Math.PI * 2); g.fill(); }
         g.globalAlpha = 1;
-        if (v.s > 1.6) {
+        const labelled = gi === 0 || a.id === selected || followed?.includes(a.id);
+        if (v.s > 1.6 && labelled) {
           g.fillStyle = "rgba(255,255,255,0.9)"; g.font = `600 ${Math.max(9, T * 0.32)}px -apple-system, system-ui`;
-          g.textAlign = "center"; g.fillText(a.name, x, y - r - 3); g.textAlign = "left";
+          g.textAlign = "center"; g.fillText(gi === 0 && gn > 1 ? `${a.name} +${gn - 1}` : a.name, x, y - r - 3); g.textAlign = "left";
         }
       }
       // settlement labels
@@ -213,11 +262,14 @@ export function MapView(props: {
       // day/night from the simulated clock
       const dark = (1 - st.daylight) * 0.55;
       if (dark > 0.01) { g.fillStyle = `rgba(5,8,30,${dark})`; g.fillRect(0, 0, size.w, size.h); }
+      frames++;
+      const now = performance.now();
+      if (now - fpsT >= 1000) { (window as unknown as { __rubineFps?: number }).__rubineFps = Math.round(frames * 1000 / (now - fpsT)); frames = 0; fpsT = now; }
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [terrain, size, map, regionCentre]);
+  }, [terrain, trafficLayer, size, map, regionCentre]);
 
   const toWorld = useCallback((px: number, py: number) => {
     const v = view.current;
@@ -228,8 +280,12 @@ export function MapView(props: {
     const { state: st, buildings } = dataRef.current;
     const wpt = toWorld(px, py);
     let best: Pick | null = null, bd = 0.9;
+    const groups = new Map<string, string[]>();
+    for (const a of st.agents) { const key = `${a.x},${a.y}`; const g0 = groups.get(key); if (g0) g0.push(a.id); else groups.set(key, [a.id]); }
     for (const a of st.agents) {
-      const d = Math.hypot(a.x + 0.5 - wpt.x, a.y + 0.5 - wpt.y);
+      const grp = groups.get(`${a.x},${a.y}`)!, gi = grp.indexOf(a.id), gn = grp.length;
+      const spread = gn > 1 ? Math.min(0.42, 0.18 + 0.04 * gn) : 0, ang = (gi / gn) * Math.PI * 2;
+      const d = Math.hypot(a.x + 0.5 + Math.cos(ang) * spread - wpt.x, a.y + 0.5 + Math.sin(ang) * spread - wpt.y);
       if (d < bd) { bd = d; best = { kind: "agent", id: a.id }; }
     }
     if (!best) {
@@ -288,7 +344,7 @@ export function MapView(props: {
   };
 
   return (
-    <div ref={wrapRef} className="relative w-full overflow-hidden rounded-[22px] border border-white/8" style={{ height: props.height }}>
+    <div ref={wrapRef} className={`relative w-full overflow-hidden ${props.rounded === false ? "" : "rounded-[22px] border border-white/8"}`} style={{ height: props.height }}>
       <canvas
         ref={canvasRef}
         style={{ width: size.w, height: size.h, touchAction: "none", display: "block" }}
@@ -297,7 +353,7 @@ export function MapView(props: {
         onDoubleClick={(e) => { const r = (e.target as HTMLElement).getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, 1.6); }}
         aria-label="Karte von Rubine World"
       />
-      <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-1">
+      <div className="pointer-events-none absolute bottom-2 right-2 flex flex-col gap-1">
         <div className="pointer-events-auto flex gap-1">
           <button className="glass tap grid h-9 w-9 place-items-center rounded-xl text-lg" onClick={() => zoomAt(size.w / 2, size.h / 2, 1.3)} aria-label="Hineinzoomen">+</button>
           <button className="glass tap grid h-9 w-9 place-items-center rounded-xl text-lg" onClick={() => zoomAt(size.w / 2, size.h / 2, 0.77)} aria-label="Herauszoomen">−</button>

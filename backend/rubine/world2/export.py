@@ -182,3 +182,36 @@ def build_sim_eval(n: int = 32, seed: int = 424242, days: int = 40) -> list[dict
                 seen.add(t.prompt_hash)
                 out.append(t)
     return [t.to_dict() for t in out]
+
+
+# ------------------------------------------------------------------ resident decisions (World 3.0)
+TRAIN_DECISION_CATS = ("bedarf", "planung", "vertrauen", "folgen", "ursache")  # "anpassung"/"normen" stay untrained (transfer test)
+
+
+def export_resident_decisions(s, *, worlds: int = 6, per_cat: int = 10, seed_base: int = 900_000) -> dict:
+    """Situation-determined decision examples from separate training worlds (never the benchmark seed).
+    The answer is fixed by the constructed situation, so these are verified by construction."""
+    from ..training import data as D
+    from . import benchmark as B
+    stats = {"added": 0, "duplicates": 0, "rejected_filter": 0, "worlds": worlds, "categories": list(TRAIN_DECISION_CATS)}
+    for k in range(worlds):
+        seed = seed_base + k
+        if seed in (B.BENCH_SEED, 424242):
+            continue
+        for it in B.build_items(seed=seed, per_cat=per_cat):
+            if it["cat"] not in TRAIN_DECISION_CATS:
+                continue
+            ans = it["correct"][0] + 1
+            try:
+                ex = D.add_example(s, messages=[{"role": "system", "content": it["system"]}, {"role": "user", "content": it["user"]}],
+                                   response=f"Wahl: {ans}", source="sim_gold", family="bewohner_entscheidung", verified=True,
+                                   verifier=f"benchmark.{it['cat']}", status="approved",
+                                   meta={"world_seed": seed, "cat": it["cat"], "answer": str(ans)})
+            except D.DataError:
+                stats["rejected_filter"] += 1
+                continue
+            if ex:
+                stats["added"] += 1
+            else:
+                stats["duplicates"] += 1
+    return stats

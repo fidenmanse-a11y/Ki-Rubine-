@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { FamilyBars, LossChart } from "@/components/Charts";
+import { AgentBenchCard } from "@/components/lab/AgentBench";
 import { IconPause, IconPlay, IconStop, IconUpload } from "@/components/icons";
 import { Badge, Button, Card, Field, inputCls, Notice, Progress, Sheet, Spinner, Stat, statusLabel, statusTone } from "@/components/ui";
 import { api, pct, timeAgo, useEventStream } from "@/lib/api";
@@ -87,7 +89,10 @@ export default function LabPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 pt-safe" style={{ paddingBottom: "calc(max(var(--sab),10px) + 96px)" }}>
       <header className="pb-3 pt-2">
-        <h1 className="text-[30px] font-bold tracking-tight">AI Lab</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-[30px] font-bold tracking-tight">AI Lab</h1>
+          <Link href="/settings/" className="tap glass grid place-items-center rounded-2xl px-4 text-[14px] font-medium">Einstellungen</Link>
+        </div>
         <p className="text-[14px] text-fg-3">
           {engine ? `${engine.base_model} · ${engine.device ?? "—"} · Modell ${engine.status}` : "…"}
         </p>
@@ -232,6 +237,8 @@ export default function LabPage() {
         </Button>
         {lastCompare?.result && <CompareResult r={lastCompare.result as unknown as CompareRes} />}
       </Card>
+
+      <AgentBenchCard versions={versions} onMsg={(text, tone) => setMsg({ text, tone })} />
 
       {/* History */}
       <Card className="mt-4" title="Verlauf">
@@ -431,6 +438,7 @@ function DataSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => run(() => api("/api/lab/data/simulation", { method: "POST", json: { per_family: 60 } }), "Simulations-Export gestartet")}>Verifizierte Aufgaben exportieren</Button>
             <Button variant="ghost" onClick={() => run(() => api("/api/lab/data/simulation", { method: "POST", json: { per_family: 60, include_dialogs: true } }), "Export inkl. Dialoge gestartet (Dialoge warten auf Prüfung)")}>+ Dialoge zur Prüfung</Button>
+            <Button variant="ghost" onClick={() => run(() => api("/api/lab/data/simulation", { method: "POST", json: { resident_decisions: true } }), "Bewohner-Entscheidungen werden aus separaten Trainingswelten erzeugt")}>+ Bewohner-Entscheidungen</Button>
           </div>
         </Card>
         <Card title="Seed-Daten (von Claude Code erstellt)">

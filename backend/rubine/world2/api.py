@@ -55,7 +55,7 @@ def agent_brief(w, a: dict) -> dict:
     return {"id": a["id"], "name": a["name"], "family": a["family"], "x": a["x"], "y": a["y"], "alive": a["alive"],
             "age": int(w.age(a)), "activity": label, "cat": act.get("type"), "asleep": bool(a.get("asleep")),
             "ill": bool(a.get("illness")), "origin": a["origin"], "child": w.age(a) < R.ADULT_AGE,
-            "thinking": bool(a.get("pending")), "health": round(a["health"], 2)}
+            "thinking": bool(a.get("pending")), "health": round(a["health"], 2), "prisoner": bool(a.get("prison"))}
 
 
 def live_state(w, s: WorldService) -> dict:
@@ -108,8 +108,11 @@ def world_map() -> dict:
         roads = [[int(x), int(y)] for y, x in zip(*m["road"].nonzero())]
         bridges = [[int(x), int(y)] for y, x in zip(*m["bridge"].nonzero())]
         flooded = [[int(x), int(y)] for y, x in zip(*m["flooded"].nonzero())]
+        tr = m.get("traffic")
+        # traffic intensity per tile, 0-3 (worn paths become visible; the residents pave busy routes themselves)
+        traffic = ["".join(str(min(3, int(v) // 15)) for v in row) for row in tr] if tr is not None else None
         return {"w": w.w, "h": w.h, "terrain": rows, "terrain_legend": dict(zip(TERRAIN_CHARS, [R.TERRAINS[t][0] for t in TERRAIN_CODES])),
-                "wood": wood, "region": region, "regions": w.region_names, "roads": roads, "bridges": bridges, "flooded": flooded,
+                "wood": wood, "region": region, "regions": w.region_names, "roads": roads, "bridges": bridges, "flooded": flooded, "traffic": traffic,
                 "map_version": w.config.get("map_version", 0), **structures(w)}
 
 
@@ -208,7 +211,7 @@ def agent_detail(aid: str) -> dict:
             "home": {"id": home["id"], "label": R.BUILDINGS[home["type"]]["label"], "condition": round(home["condition"], 2),
                      "storage": home.get("inv", {})} if home else None,
             "owned": owned, "contracts": contracts, "debts": a.get("debts", 0),
-            "goals": a["goals"], "intention": a.get("intention"), "plans": a["plans"],
+            "goals": a["goals"], "intention": a.get("intention"), "plans": a["plans"], "mind": _mind(w, a),
             "action": (a.get("action") or {}).get("label"), "thinking": a.get("pending"),
             "relations": rels[:10], "memories": ltm, "recent": a["stm"][-8:][::-1], "knowledge": facts,
             "bio": a["bio"][-20:], "decisions": a["decisions"][::-1][:10],
@@ -217,9 +220,16 @@ def agent_detail(aid: str) -> dict:
         }
 
 
+def _mind(w, a: dict) -> dict:
+    from .api3 import mind_view
+    return mind_view(w, a)
+
+
 def _occupation(w, a: dict) -> str:
     if w.age(a) < 6:
         return "Kleinkind"
+    if a.get("prison"):
+        return "in Haft"
     if w.age(a) < R.ADULT_AGE:
         return "Schulkind" if a["stats"].get("schultage") else "Kind"
     c = w.contracts.get(a.get("employer") or "")
